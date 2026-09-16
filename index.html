@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>경쟁사 재고 추적 대시보드</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  body { font-family: -apple-system, "Malgun Gothic", sans-serif; background:#f5f5f7; margin:0; padding:24px; color:#222; }
+  h1 { font-size:20px; margin-bottom:4px; }
+  .updated { color:#888; font-size:13px; margin-bottom:20px; }
+  table { width:100%; border-collapse:collapse; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.08); margin-bottom:28px; }
+  th, td { padding:10px 14px; text-align:left; font-size:14px; border-bottom:1px solid #eee; }
+  th { background:#fafafa; color:#555; }
+  tr:hover { background:#fafafa; cursor:pointer; }
+  .sold { font-weight:600; color:#e0442f; }
+  #chartWrap { background:#fff; border-radius:8px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,0.08); display:none; }
+  #chartTitle { font-size:14px; color:#555; margin-bottom:8px; }
+</style>
+</head>
+<body>
+  <h1>경쟁사 재고 추적 대시보드</h1>
+  <div class="updated" id="updated">데이터 불러오는 중...</div>
+
+  <table id="table">
+    <thead>
+      <tr><th>스토어</th><th>상품번호</th><th>최근 확인일</th><th>현재 재고</th><th>일일 판매추정</th></tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+
+  <div id="chartWrap">
+    <div id="chartTitle"></div>
+    <canvas id="chart" height="90"></canvas>
+  </div>
+
+<script>
+async function loadData() {
+  const latestRes = await fetch('data/latest.json?_=' + Date.now());
+  const latest = await latestRes.json();
+
+  const historyRes = await fetch('data/history.json?_=' + Date.now());
+  const history = await historyRes.json();
+
+  const tbody = document.getElementById('tbody');
+  const entries = Object.entries(latest);
+
+  if (entries.length === 0) {
+    document.getElementById('updated').textContent = '아직 수집된 데이터가 없음. 첫 자동 실행을 기다려주세요.';
+    return;
+  }
+
+  let maxDate = '';
+  entries.forEach(([key, item]) => { if (item.date > maxDate) maxDate = item.date; });
+  document.getElementById('updated').textContent = '최근 업데이트: ' + maxDate;
+
+  entries.sort((a, b) => (b[1].estSold || 0) - (a[1].estSold || 0));
+
+  entries.forEach(([key, item]) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${item.store}</td>
+      <td>${item.product}</td>
+      <td>${item.date}</td>
+      <td>${item.stock.toLocaleString()}개</td>
+      <td class="sold">${item.estSold === '' ? '-' : item.estSold + '개'}</td>
+    `;
+    tr.addEventListener('click', () => showChart(key, item.store, history[key] || {}));
+    tbody.appendChild(tr);
+  });
+}
+
+let chartInstance = null;
+function showChart(key, storeName, dataObj) {
+  const wrap = document.getElementById('chartWrap');
+  wrap.style.display = 'block';
+  document.getElementById('chartTitle').textContent = storeName + ' 재고 추이';
+
+  const dates = Object.keys(dataObj).sort();
+  const values = dates.map(d => dataObj[d]);
+
+  if (chartInstance) chartInstance.destroy();
+  chartInstance = new Chart(document.getElementById('chart'), {
+    type: 'line',
+    data: {
+      labels: dates,
+      datasets: [{ label: '재고 수량', data: values, borderColor: '#03c75a', backgroundColor: 'rgba(3,199,90,0.1)', tension: 0.2, fill: true }]
+    },
+    options: { plugins: { legend: { display: false } } }
+  });
+}
+
+loadData().catch(err => {
+  document.getElementById('updated').textContent = '데이터 로드 실패: ' + err.message;
+});
+</script>
+</body>
+</html>
