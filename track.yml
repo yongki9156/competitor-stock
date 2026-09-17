@@ -1,0 +1,34 @@
+name: 재고 자동 추적
+
+on:
+  schedule:
+    # UTC 기준 00:30 = 한국시간(KST) 09:30
+    - cron: "30 0 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  track:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 라이브러리 설치
+        run: pip install requests
+
+      - name: 재고 조회 실행
+        run: python track.py
+
+      - name: 변경사항 커밋
+        run: |
+          git config user.name "stock-tracker-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/
+          git diff --cached --quiet || git commit -m "재고 데이터 업데이트 $(date +'%Y-%m-%d')"
+          git push
