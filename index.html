@@ -9,12 +9,13 @@
   .updated { color:#888; font-size:13px; margin-bottom:16px; }
   input[type="text"] { width:100%; max-width:360px; padding:10px 14px; border:1px solid #ddd; border-radius:8px; font-size:14px; margin-bottom:16px; box-sizing:border-box; }
   table { width:100%; border-collapse:collapse; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.08); }
-  th, td { padding:10px 14px; text-align:left; font-size:14px; border-bottom:1px solid #eee; }
+  th, td { padding:10px 14px; text-align:left; font-size:14px; border-bottom:1px solid #eee; white-space:nowrap; }
   th { background:#fafafa; color:#555; position:sticky; top:0; cursor:pointer; user-select:none; }
-  tr:hover { background:#fafafa; }
+  tr:hover { background:#fafafa; cursor:pointer; }
   .sold { font-weight:700; }
   .sold-high { color:#e0442f; }
   .count { color:#888; font-size:13px; margin-bottom:8px; }
+  .hint { color:#aaa; font-size:12px; margin-bottom:12px; }
 </style>
 </head>
 <body>
@@ -22,6 +23,7 @@
   <div class="updated" id="updated">데이터 불러오는 중...</div>
   <input type="text" id="search" placeholder="스토어, 상품명, 옵션 검색">
   <div class="count" id="count"></div>
+  <div class="hint">줄을 클릭하면 시간대별 재고 기록을 볼 수 있음</div>
 
   <table id="table">
     <thead>
@@ -29,8 +31,10 @@
         <th data-key="store">스토어</th>
         <th data-key="productName">상품명</th>
         <th data-key="optionName">옵션</th>
+        <th>추이</th>
         <th data-key="stock">현재 재고</th>
-        <th data-key="estSold">일일 판매추정</th>
+        <th data-key="yestSold">어제 판매</th>
+        <th data-key="todaySold">오늘 누적판매</th>
       </tr>
     </thead>
     <tbody id="tbody"></tbody>
@@ -38,29 +42,82 @@
 
 <script>
 let rows = [];
+let historyData = {};
+
+function pad(n) { return String(n).padStart(2, '0'); }
+function dateStr(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+
+function computeDayTotal(rec, dayStr) {
+  const allTs = Object.keys(rec).sort();
+  const beforeDay = allTs.filter((t) => t < dayStr).pop();
+  const dayTs = allTs.filter((t) => t.startsWith(dayStr));
+  if (!dayTs.length) return null;
+  const seq = [];
+  if (beforeDay) seq.push(rec[beforeDay]);
+  dayTs.forEach((t) => seq.push(rec[t]));
+  if (seq.length < 2) return null;
+  let sold = 0;
+  for (let i = 1; i < seq.length; i++) {
+    const d = seq[i - 1] - seq[i];
+    if (d > 0) sold += d;
+  }
+  return sold;
+}
+
+function sparkline(rec) {
+  const allTs = Object.keys(rec).sort().slice(-24);
+  if (allTs.length < 2) return '<span style="color:#ccc">-</span>';
+  const values = allTs.map((t) => rec[t]);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const w = 90, h = 26;
+  const range = max - min || 1;
+  const points = values
+    .map((v, i) => {
+      const x = (i / (values.length - 1)) * w;
+      const y = h - ((v - min) / range) * h;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(' ');
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline points="${points}" fill="none" stroke="#e0442f" stroke-width="1.6" /></svg>`;
+}
+
+function showDetail(key, label) {
+  const rec = historyData[key] || {};
+  const entries = Object.keys(rec).sort().slice(-72);
+  const lines = entries.map((t) => `${t}   ${rec[t].toLocaleString()}개`).join('\n');
+  alert(`${label}\n(최근 기록, 시간 : 재고)\n\n${lines || '기록 없음'}`);
+}
 
 function render() {
   const q = document.getElementById('search').value.trim().toLowerCase();
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '';
 
-  const filtered = rows.filter(r =>
-    !q || r.store.toLowerCase().includes(q) || (r.productName || '').toLowerCase().includes(q) || (r.optionName || '').toLowerCase().includes(q)
+  const filtered = rows.filter(
+    (r) =>
+      !q ||
+      r.store.toLowerCase().includes(q) ||
+      (r.productName || '').toLowerCase().includes(q) ||
+      (r.optionName || '').toLowerCase().includes(q)
   );
 
   document.getElementById('count').textContent = `${filtered.length}개 옵션 표시중 (전체 ${rows.length}개)`;
 
-  filtered.forEach(item => {
+  filtered.forEach((item) => {
     const tr = document.createElement('tr');
-    const soldNum = item.estSold === '' ? null : item.estSold;
-    const soldClass = soldNum !== null && soldNum >= 10 ? 'sold sold-high' : 'sold';
+    const yestClass = item.yestSold !== null && item.yestSold >= 10 ? 'sold sold-high' : 'sold';
+    const todayClass = item.todaySold !== null && item.todaySold >= 10 ? 'sold sold-high' : 'sold';
     tr.innerHTML = `
       <td>${item.store}</td>
       <td>${item.productName || ''}</td>
       <td>${item.optionName || ''}</td>
+      <td>${sparkline(historyData[item.key] || {})}</td>
       <td>${item.stock.toLocaleString()}개</td>
-      <td class="${soldClass}">${soldNum === null ? '-' : soldNum.toLocaleString() + '개'}</td>
+      <td class="${yestClass}">${item.yestSold === null ? '-' : item.yestSold.toLocaleString() + '개'}</td>
+      <td class="${todayClass}">${item.todaySold === null ? '-' : item.todaySold.toLocaleString() + '개'}</td>
     `;
+    tr.addEventListener('click', () => showDetail(item.key, `${item.store} / ${item.optionName}`));
     tbody.appendChild(tr);
   });
 }
@@ -86,10 +143,29 @@ async function loadActiveProducts() {
 }
 
 async function loadData() {
-  const res = await fetch('data/latest.json?_=' + Date.now());
-  const latest = await res.json();
+  const [latestRes, historyRes] = await Promise.all([
+    fetch('data/latest.json?_=' + Date.now()),
+    fetch('data/history.json?_=' + Date.now()),
+  ]);
+  const latest = await latestRes.json();
+  historyData = await historyRes.json();
 
-  rows = Object.values(latest);
+  const today = dateStr(new Date());
+  const yest = dateStr(new Date(Date.now() - 86400000));
+
+  rows = Object.entries(latest).map(([key, item]) => {
+    const rec = historyData[key] || {};
+    return {
+      key,
+      product: item.product,
+      store: item.store,
+      productName: item.productName,
+      optionName: item.optionName,
+      stock: item.stock,
+      yestSold: computeDayTotal(rec, yest),
+      todaySold: computeDayTotal(rec, today),
+    };
+  });
 
   const active = await loadActiveProducts();
   if (active) {
@@ -101,14 +177,11 @@ async function loadData() {
     return;
   }
 
-  let maxDate = '';
-  rows.forEach(r => { if (r.date > maxDate) maxDate = r.date; });
-  document.getElementById('updated').textContent = '최근 업데이트: ' + maxDate;
+  document.getElementById('updated').textContent = '최근 업데이트: ' + new Date().toLocaleString('ko-KR');
 
-  // 기본 정렬: 판매추정 높은 순
   rows.sort((a, b) => {
-    const av = a.estSold === '' ? -1 : a.estSold;
-    const bv = b.estSold === '' ? -1 : b.estSold;
+    const av = a.todaySold === null ? -1 : a.todaySold;
+    const bv = b.todaySold === null ? -1 : b.todaySold;
     return bv - av;
   });
 
@@ -117,14 +190,17 @@ async function loadData() {
 
 document.getElementById('search').addEventListener('input', render);
 
-document.querySelectorAll('th[data-key]').forEach(th => {
+document.querySelectorAll('th[data-key]').forEach((th) => {
   let asc = false;
   th.addEventListener('click', () => {
     const key = th.dataset.key;
     asc = !asc;
     rows.sort((a, b) => {
       let av = a[key], bv = b[key];
-      if (key === 'estSold') { av = av === '' ? -1 : av; bv = bv === '' ? -1 : bv; }
+      if (key === 'yestSold' || key === 'todaySold') {
+        av = av === null ? -1 : av;
+        bv = bv === null ? -1 : bv;
+      }
       if (typeof av === 'string') return asc ? av.localeCompare(bv) : bv.localeCompare(av);
       return asc ? av - bv : bv - av;
     });
@@ -132,7 +208,7 @@ document.querySelectorAll('th[data-key]').forEach(th => {
   });
 });
 
-loadData().catch(err => {
+loadData().catch((err) => {
   document.getElementById('updated').textContent = '데이터 로드 실패: ' + err.message;
 });
 </script>
