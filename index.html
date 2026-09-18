@@ -65,11 +65,36 @@ function render() {
   });
 }
 
+async function loadActiveProducts() {
+  try {
+    const res = await fetch('products.txt?_=' + Date.now());
+    if (!res.ok) return null;
+    const text = await res.text();
+    const nums = text
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map((l) => {
+        const m = l.match(/products\/(\d+)/);
+        return m ? m[1] : null;
+      })
+      .filter(Boolean);
+    return new Set(nums);
+  } catch (e) {
+    return null;
+  }
+}
+
 async function loadData() {
   const res = await fetch('data/latest.json?_=' + Date.now());
   const latest = await res.json();
 
   rows = Object.values(latest);
+
+  const active = await loadActiveProducts();
+  if (active) {
+    rows = rows.filter((r) => active.has(String(r.product)));
+  }
 
   if (rows.length === 0) {
     document.getElementById('updated').textContent = '아직 수집된 데이터가 없음. 첫 자동 실행을 기다려주세요.';
