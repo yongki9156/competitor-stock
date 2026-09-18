@@ -10,7 +10,7 @@ for /f "usebackq delims=" %%u in ("products.txt") do (
 echo Syncing product list to GitHub...
 git add -A
 git commit -m "update product list"
-git pull origin main --no-rebase
+git pull origin main --no-rebase --no-edit
 git push
 
 echo Done.
