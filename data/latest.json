@@ -465,7 +465,7 @@
     "optionName": "비접착식 47cm(15장) / 테라조_오트밀 크림(D1)",
     "date": "2026-09-18",
     "stock": 98351,
-    "estSold": ""
+    "estSold": 0
   },
   "2sWE1Ms5zyoCvc6EZli4e_6972896159_46448806023": {
     "store": "도든",
@@ -474,7 +474,7 @@
     "optionName": "비접착식 47cm(15장) / 테라조_브레드 버터(D2)",
     "date": "2026-09-18",
     "stock": 98362,
-    "estSold": ""
+    "estSold": 0
   },
   "2sWE1Ms5zyoCvc6EZli4e_6972896159_46448806024": {
     "store": "도든",
@@ -483,7 +483,7 @@
     "optionName": "비접착식 47cm(15장) / 테라조_오레오 그레이(D3)",
     "date": "2026-09-18",
     "stock": 99765,
-    "estSold": ""
+    "estSold": 0
   },
   "2sWE1Ms5zyoCvc6EZli4e_6972896159_46448806025": {
     "store": "도든",
@@ -492,7 +492,7 @@
     "optionName": "비접착식 47cm(15장) / 테라조_블랙빈 그레이(D4)",
     "date": "2026-09-18",
     "stock": 99981,
-    "estSold": ""
+    "estSold": 0
   },
   "2sWE1Ms5zyoCvc6EZli4e_6972896159_46448806026": {
     "store": "도든",
@@ -501,7 +501,7 @@
     "optionName": "비접착식 47cm(15장) / 스톤_라이트 그레이(D5)",
     "date": "2026-09-18",
     "stock": 99993,
-    "estSold": ""
+    "estSold": 0
   },
   "2sWE1Ms5zyoCvc6EZli4e_6972896159_46448806027": {
     "store": "도든",
@@ -510,6 +510,6 @@
     "optionName": "비접착식 47cm(15장) / 스톤_차콜 그레이(D6)",
     "date": "2026-09-18",
     "stock": 9995,
-    "estSold": ""
+    "estSold": 0
   }
 }
