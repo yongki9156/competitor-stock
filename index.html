@@ -20,7 +20,7 @@
 <body>
   <h1>경쟁사 판매량 추적 대시보드</h1>
   <div class="updated" id="updated">데이터 불러오는 중...</div>
-  <input type="text" id="search" placeholder="스토어 또는 상품명 검색">
+  <input type="text" id="search" placeholder="스토어, 상품명, 옵션 검색">
   <div class="count" id="count"></div>
 
   <table id="table">
@@ -45,7 +45,7 @@ function render() {
   tbody.innerHTML = '';
 
   const filtered = rows.filter(r =>
-    !q || r.store.toLowerCase().includes(q) || (r.productName || '').toLowerCase().includes(q)
+    !q || r.store.toLowerCase().includes(q) || (r.productName || '').toLowerCase().includes(q) || (r.optionName || '').toLowerCase().includes(q)
   );
 
   document.getElementById('count').textContent = `${filtered.length}개 옵션 표시중 (전체 ${rows.length}개)`;
