@@ -31,7 +31,7 @@
         <th data-key="store">스토어</th>
         <th data-key="productName">상품명</th>
         <th data-key="optionName">옵션</th>
-        <th>추이</th>
+        <th>최근확인</th>
         <th data-key="stock">현재 재고</th>
         <th data-key="yestSold">어제 판매</th>
         <th data-key="todaySold">오늘 누적판매</th>
@@ -64,22 +64,16 @@ function computeDayTotal(rec, dayStr) {
   return sold;
 }
 
-function sparkline(rec) {
-  const allTs = Object.keys(rec).sort().slice(-24);
-  if (allTs.length < 2) return '<span style="color:#ccc">-</span>';
-  const values = allTs.map((t) => rec[t]);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const w = 90, h = 26;
-  const range = max - min || 1;
-  const points = values
-    .map((v, i) => {
-      const x = (i / (values.length - 1)) * w;
-      const y = h - ((v - min) / range) * h;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(' ');
-  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline points="${points}" fill="none" stroke="#e0442f" stroke-width="1.6" /></svg>`;
+function formatTs(t) {
+  if (!t) return '-';
+  return t.replace('T', ' ');
+}
+
+function latestEntry(rec) {
+  const allTs = Object.keys(rec).sort();
+  if (!allTs.length) return null;
+  const t = allTs[allTs.length - 1];
+  return { time: t, stock: rec[t] };
 }
 
 function showDetail(key, label) {
@@ -108,11 +102,13 @@ function render() {
     const tr = document.createElement('tr');
     const yestClass = item.yestSold !== null && item.yestSold >= 10 ? 'sold sold-high' : 'sold';
     const todayClass = item.todaySold !== null && item.todaySold >= 10 ? 'sold sold-high' : 'sold';
+    const latest = latestEntry(historyData[item.key] || {});
+    const latestText = latest ? `${formatTs(latest.time)}<br>${latest.stock.toLocaleString()}개` : '-';
     tr.innerHTML = `
       <td>${item.store}</td>
       <td>${item.productName || ''}</td>
       <td>${item.optionName || ''}</td>
-      <td>${sparkline(historyData[item.key] || {})}</td>
+      <td style="font-size:12px;color:#666">${latestText}</td>
       <td>${item.stock.toLocaleString()}개</td>
       <td class="${yestClass}">${item.yestSold === null ? '-' : item.yestSold.toLocaleString() + '개'}</td>
       <td class="${todayClass}">${item.todaySold === null ? '-' : item.todaySold.toLocaleString() + '개'}</td>
@@ -177,7 +173,14 @@ async function loadData() {
     return;
   }
 
-  document.getElementById('updated').textContent = '최근 업데이트: ' + new Date().toLocaleString('ko-KR');
+  let maxTs = '';
+  Object.values(historyData).forEach((rec) => {
+    const ts = Object.keys(rec).sort().pop();
+    if (ts && ts > maxTs) maxTs = ts;
+  });
+  document.getElementById('updated').textContent = maxTs
+    ? '데이터 기준 최근 확인: ' + formatTs(maxTs)
+    : '데이터 없음';
 
   rows.sort((a, b) => {
     const av = a.todaySold === null ? -1 : a.todaySold;
