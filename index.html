@@ -11,7 +11,10 @@
   table { width:100%; border-collapse:collapse; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.08); }
   th, td { padding:10px 14px; text-align:left; font-size:14px; border-bottom:1px solid #eee; white-space:nowrap; }
   th { background:#fafafa; color:#555; position:sticky; top:0; cursor:pointer; user-select:none; }
-  tr:hover { background:#fafafa; cursor:pointer; }
+  tbody tr { cursor:pointer; }
+  tbody tr:hover { filter:brightness(0.95); }
+  .legend { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+  .chip { padding:4px 12px; border-radius:999px; font-size:13px; font-weight:600; border-left:6px solid; }
   .sold { font-weight:700; }
   .sold-high { color:#e0442f; }
   .count { color:#888; font-size:13px; margin-bottom:8px; }
@@ -23,6 +26,7 @@
   <div class="updated" id="updated">데이터 불러오는 중...</div>
   <input type="text" id="search" placeholder="스토어, 상품명, 옵션 검색">
   <div class="count" id="count"></div>
+  <div class="legend" id="legend"></div>
   <div class="hint">줄을 클릭하면 시간대별 재고 기록을 볼 수 있음</div>
 
   <table id="table">
@@ -45,10 +49,10 @@ let rows = [];
 let historyData = {};
 
 function toDate(key) {
-  const [d, t] = key.split('T');
+  const [d, t = '00:00'] = key.split('T');
   const [y, m, day] = d.split('-').map(Number);
   const [hh, mm] = t.split(':').map(Number);
-  return new Date(y, m - 1, day, hh, mm);
+  return new Date(y, m - 1, day, hh || 0, mm || 0);
 }
 
 function computeWindowTotal(rec, startDate, endDate) {
@@ -108,6 +112,27 @@ function showDetail(key, label) {
   alert(`${label}\n(최근 기록, 시간 : 재고)\n\n${lines || '기록 없음'}`);
 }
 
+const PALETTE = [
+  { bg: '#e8f1ff', accent: '#3b82f6' },
+  { bg: '#fff1e0', accent: '#f59e0b' },
+  { bg: '#eaf7ea', accent: '#22a55b' },
+  { bg: '#f6e9fb', accent: '#a855f7' },
+  { bg: '#fde8ee', accent: '#ec4899' },
+  { bg: '#e0f7f7', accent: '#14b8a6' },
+  { bg: '#fffbe0', accent: '#ca8a04' },
+  { bg: '#eeeeee', accent: '#6b7280' },
+];
+let storeColors = {};
+
+function buildStoreColors() {
+  const stores = [...new Set(rows.map((r) => r.store))].sort();
+  storeColors = {};
+  stores.forEach((st, i) => { storeColors[st] = PALETTE[i % PALETTE.length]; });
+  document.getElementById('legend').innerHTML = stores
+    .map((st) => `<span class="chip" style="background:${storeColors[st].bg};border-color:${storeColors[st].accent}">${st}</span>`)
+    .join('');
+}
+
 function render() {
   const q = document.getElementById('search').value.trim().toLowerCase();
   const tbody = document.getElementById('tbody');
@@ -125,12 +150,14 @@ function render() {
 
   filtered.forEach((item) => {
     const tr = document.createElement('tr');
+    const color = storeColors[item.store];
+    if (color) tr.style.background = color.bg;
     const yestClass = item.yestSold !== null && item.yestSold >= 10 ? 'sold sold-high' : 'sold';
     const todayClass = item.todaySold !== null && item.todaySold >= 10 ? 'sold sold-high' : 'sold';
     const latest = latestEntry(historyData[item.key] || {});
     const latestText = latest ? `${formatTs(latest.time)}<br>${latest.stock.toLocaleString()}개` : '-';
     tr.innerHTML = `
-      <td>${item.store}</td>
+      <td style="font-weight:600;border-left:6px solid ${color ? color.accent : 'transparent'}">${item.store}</td>
       <td>${item.productName || ''}</td>
       <td>${item.optionName || ''}</td>
       <td style="font-size:12px;color:#666">${latestText}</td>
@@ -212,6 +239,7 @@ async function loadData() {
     return bv - av;
   });
 
+  buildStoreColors();
   render();
 }
 
