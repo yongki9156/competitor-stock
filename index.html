@@ -33,8 +33,8 @@
         <th data-key="optionName">옵션</th>
         <th>최근확인</th>
         <th data-key="stock">현재 재고</th>
-        <th data-key="yestSold">어제 판매</th>
-        <th data-key="todaySold">오늘 누적판매</th>
+        <th data-key="yestSold">어제 판매<br><span style="font-weight:400;font-size:11px;color:#999">그제18시~어제18시</span></th>
+        <th data-key="todaySold">오늘 누적판매<br><span style="font-weight:400;font-size:11px;color:#999">어제18시~지금</span></th>
       </tr>
     </thead>
     <tbody id="tbody"></tbody>
@@ -44,24 +44,49 @@
 let rows = [];
 let historyData = {};
 
-function pad(n) { return String(n).padStart(2, '0'); }
-function dateStr(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+function toDate(key) {
+  const [d, t] = key.split('T');
+  const [y, m, day] = d.split('-').map(Number);
+  const [hh, mm] = t.split(':').map(Number);
+  return new Date(y, m - 1, day, hh, mm);
+}
 
-function computeDayTotal(rec, dayStr) {
-  const allTs = Object.keys(rec).sort();
-  const beforeDay = allTs.filter((t) => t < dayStr).pop();
-  const dayTs = allTs.filter((t) => t.startsWith(dayStr));
-  if (!dayTs.length) return null;
+function computeWindowTotal(rec, startDate, endDate) {
+  const entries = Object.keys(rec)
+    .map((k) => ({ dt: toDate(k), v: rec[k] }))
+    .sort((a, b) => a.dt - b.dt);
+  if (!entries.length) return null;
+
+  const before = entries.filter((e) => e.dt <= startDate).pop();
+  const within = entries.filter((e) => e.dt > startDate && e.dt <= endDate);
+  if (!within.length) return null;
+
   const seq = [];
-  if (beforeDay) seq.push(rec[beforeDay]);
-  dayTs.forEach((t) => seq.push(rec[t]));
+  if (before) seq.push(before.v);
+  within.forEach((e) => seq.push(e.v));
   if (seq.length < 2) return null;
+
   let sold = 0;
   for (let i = 1; i < seq.length; i++) {
-    const d = seq[i - 1] - seq[i];
-    if (d > 0) sold += d;
+    const diff = seq[i - 1] - seq[i];
+    if (diff > 0) sold += diff;
   }
   return sold;
+}
+
+function bizBoundaries(now) {
+  // 하루 기준: 전날 18:00 ~ 오늘 18:00 (사용자 지정)
+  const y = new Date(now);
+  y.setDate(y.getDate() - 1);
+  y.setHours(18, 0, 0, 0);
+
+  const currentStart = y;
+  const currentEnd = now;
+  const prevEnd = new Date(y);
+  const prevStart = new Date(y);
+  prevStart.setDate(prevStart.getDate() - 1);
+
+  return { currentStart, currentEnd, prevStart, prevEnd };
 }
 
 function formatTs(t) {
@@ -146,8 +171,7 @@ async function loadData() {
   const latest = await latestRes.json();
   historyData = await historyRes.json();
 
-  const today = dateStr(new Date());
-  const yest = dateStr(new Date(Date.now() - 86400000));
+  const bounds = bizBoundaries(new Date());
 
   rows = Object.entries(latest).map(([key, item]) => {
     const rec = historyData[key] || {};
@@ -158,8 +182,8 @@ async function loadData() {
       productName: item.productName,
       optionName: item.optionName,
       stock: item.stock,
-      yestSold: computeDayTotal(rec, yest),
-      todaySold: computeDayTotal(rec, today),
+      yestSold: computeWindowTotal(rec, bounds.prevStart, bounds.prevEnd),
+      todaySold: computeWindowTotal(rec, bounds.currentStart, bounds.currentEnd),
     };
   });
 
