@@ -808,5 +808,32 @@
     "date": "2026-09-18",
     "stock": 9996,
     "estSold": ""
+  },
+  "2sWDwlXVAp1HXIBRdw3ic_9171808038_34529020332": {
+    "store": "조양마트",
+    "product": "9171808038",
+    "productName": "CJ제일제당 스팸 클래식 8호 선물세트",
+    "optionName": "스팸 8호 선물세트",
+    "date": "2026-09-28",
+    "stock": 0,
+    "estSold": ""
+  },
+  "2sWDwlXVAp1HXIBRdw3ic_9171808038_51651548002": {
+    "store": "조양마트",
+    "product": "9171808038",
+    "productName": "CJ제일제당 스팸 클래식 8호 선물세트",
+    "optionName": "스팸 8K호 선물세트",
+    "date": "2026-09-28",
+    "stock": 97587,
+    "estSold": ""
+  },
+  "2sWDwlXVAp1HXIBRdw3ic_9171808038_55575360936": {
+    "store": "조양마트",
+    "product": "9171808038",
+    "productName": "CJ제일제당 스팸 클래식 8호 선물세트",
+    "optionName": "스팸 12K호 선물세트",
+    "date": "2026-09-28",
+    "stock": 99896,
+    "estSold": ""
   }
 }
