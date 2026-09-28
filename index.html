@@ -170,11 +170,25 @@ function render() {
   });
 }
 
+const REPO_API = 'https://api.github.com/repos/yongki9156/competitor-stock/contents/';
+
+// 깃허브 저장소 원본을 먼저 읽고(페이지스 재빌드 지연 없음), 실패하면 페이지스 파일로 대체
+async function fetchRepoFile(path) {
+  try {
+    const res = await fetch(REPO_API + path, {
+      headers: { Accept: 'application/vnd.github.raw+json' },
+      cache: 'no-store',
+    });
+    if (res.ok) return { text: await res.text(), source: 'github' };
+  } catch (e) { /* 아래 대체 경로 사용 */ }
+  const res = await fetch(path + '?_=' + Date.now());
+  if (!res.ok) throw new Error(path + ' 불러오기 실패');
+  return { text: await res.text(), source: 'pages' };
+}
+
 async function loadActiveProducts() {
   try {
-    const res = await fetch('products.txt?_=' + Date.now());
-    if (!res.ok) return null;
-    const text = await res.text();
+    const { text } = await fetchRepoFile('products.txt');
     const nums = text
       .split('\n')
       .map((l) => l.trim())
@@ -191,12 +205,13 @@ async function loadActiveProducts() {
 }
 
 async function loadData() {
-  const [latestRes, historyRes] = await Promise.all([
-    fetch('data/latest.json?_=' + Date.now()),
-    fetch('data/history.json?_=' + Date.now()),
+  const [latestF, historyF] = await Promise.all([
+    fetchRepoFile('data/latest.json'),
+    fetchRepoFile('data/history.json'),
   ]);
-  const latest = await latestRes.json();
-  historyData = await historyRes.json();
+  const latest = JSON.parse(latestF.text);
+  historyData = JSON.parse(historyF.text);
+  const sourceLabel = historyF.source === 'github' ? '깃허브 원본' : '페이지스 사본(수 분 늦을 수 있음)';
 
   const bounds = bizBoundaries(new Date());
 
@@ -230,7 +245,7 @@ async function loadData() {
     if (ts && ts > maxTs) maxTs = ts;
   });
   document.getElementById('updated').textContent = maxTs
-    ? '데이터 기준 최근 확인: ' + formatTs(maxTs)
+    ? '데이터 기준 최근 확인: ' + formatTs(maxTs) + '  ·  출처: ' + sourceLabel
     : '데이터 없음';
 
   rows.sort((a, b) => {
