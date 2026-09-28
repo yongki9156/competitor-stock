@@ -19,6 +19,7 @@
   .sold-high { color:#e0442f; }
   .count { color:#888; font-size:13px; margin-bottom:8px; }
   .hint { color:#aaa; font-size:12px; margin-bottom:12px; }
+  .unk { font-weight:400; font-size:11px; color:#999; cursor:help; }
 </style>
 </head>
 <body>
@@ -27,7 +28,7 @@
   <input type="text" id="search" placeholder="스토어, 상품명, 옵션 검색">
   <div class="count" id="count"></div>
   <div class="legend" id="legend"></div>
-  <div class="hint">줄을 클릭하면 시간대별 재고 기록을 볼 수 있음</div>
+  <div class="hint">줄을 클릭하면 시간대별 재고 기록을 볼 수 있음 · 회색 '기간불명'은 기록이 비어 있던 동안 줄어든 양(언제 팔렸는지 알 수 없어 따로 표시, 위 숫자에는 미포함)</div>
 
   <table id="table">
     <thead>
@@ -55,6 +56,9 @@ function toDate(key) {
   return new Date(y, m - 1, day, hh || 0, mm || 0);
 }
 
+// 기준 구간(startDate~endDate) 안의 판매량 계산
+// measured : 구간 안에서 기록이 이어져 실제로 측정된 감소량의 합
+// unknown  : 구간 시작 전 마지막 기록 ~ 구간 첫 기록 사이에 줄어든 양 (기록이 비어 있어 언제 팔렸는지 알 수 없음)
 function computeWindowTotal(rec, startDate, endDate) {
   const entries = Object.keys(rec)
     .map((k) => ({ dt: toDate(k), v: rec[k] }))
@@ -65,17 +69,42 @@ function computeWindowTotal(rec, startDate, endDate) {
   const within = entries.filter((e) => e.dt > startDate && e.dt <= endDate);
   if (!within.length) return null;
 
-  const seq = [];
-  if (before) seq.push(before.v);
-  within.forEach((e) => seq.push(e.v));
-  if (seq.length < 2) return null;
+  // 기록이 기준시각 정각에 있으면 그 기록부터 측정 구간으로 본다
+  const baselineInside = before && before.dt.getTime() === startDate.getTime();
+  const chain = baselineInside ? [before, ...within] : within;
+  if (chain.length < 2 && !before) return null;
 
-  let sold = 0;
-  for (let i = 1; i < seq.length; i++) {
-    const diff = seq[i - 1] - seq[i];
-    if (diff > 0) sold += diff;
+  let measured = 0;
+  for (let i = 1; i < chain.length; i++) {
+    const diff = chain[i - 1].v - chain[i].v;
+    if (diff > 0) measured += diff;
   }
-  return sold;
+
+  let unknown = 0;
+  let unknownSince = null;
+  if (before && !baselineInside) {
+    const diff = before.v - within[0].v;
+    if (diff > 0) {
+      unknown = diff;
+      unknownSince = before.dt;
+    }
+  }
+  return { measured, unknown, unknownSince };
+}
+
+function fmtDate(d) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function soldCell(r) {
+  if (!r) return '-';
+  let html = `${r.measured.toLocaleString()}개`;
+  if (r.unknown > 0) {
+    const tip = `마지막 기록(${fmtDate(r.unknownSince)})과 이 구간 첫 기록 사이에 줄어든 양. 그 사이 기록이 없어 언제 팔렸는지 알 수 없음`;
+    html += `<br><span class="unk" title="${tip}">+${r.unknown.toLocaleString()} 기간불명</span>`;
+  }
+  return html;
 }
 
 function bizBoundaries(now) {
@@ -162,8 +191,8 @@ function render() {
       <td>${item.optionName || ''}</td>
       <td style="font-size:12px;color:#666">${latestText}</td>
       <td>${item.stock.toLocaleString()}개</td>
-      <td class="${yestClass}">${item.yestSold === null ? '-' : item.yestSold.toLocaleString() + '개'}</td>
-      <td class="${todayClass}">${item.todaySold === null ? '-' : item.todaySold.toLocaleString() + '개'}</td>
+      <td class="${yestClass}">${soldCell(item.yestDetail)}</td>
+      <td class="${todayClass}">${soldCell(item.todayDetail)}</td>
     `;
     tr.addEventListener('click', () => showDetail(item.key, `${item.store} / ${item.optionName}`));
     tbody.appendChild(tr);
@@ -217,6 +246,8 @@ async function loadData() {
 
   rows = Object.entries(latest).map(([key, item]) => {
     const rec = historyData[key] || {};
+    const yestDetail = computeWindowTotal(rec, bounds.prevStart, bounds.prevEnd);
+    const todayDetail = computeWindowTotal(rec, bounds.currentStart, bounds.currentEnd);
     return {
       key,
       product: item.product,
@@ -224,8 +255,10 @@ async function loadData() {
       productName: item.productName,
       optionName: item.optionName,
       stock: item.stock,
-      yestSold: computeWindowTotal(rec, bounds.prevStart, bounds.prevEnd),
-      todaySold: computeWindowTotal(rec, bounds.currentStart, bounds.currentEnd),
+      yestDetail,
+      todayDetail,
+      yestSold: yestDetail ? yestDetail.measured : null,
+      todaySold: todayDetail ? todayDetail.measured : null,
     };
   });
 
