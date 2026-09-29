@@ -14,7 +14,9 @@
   tbody tr { cursor:pointer; }
   tbody tr:hover { filter:brightness(0.95); }
   .legend { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
-  .chip { padding:4px 12px; border-radius:999px; font-size:13px; font-weight:600; border-left:6px solid; }
+  .chip { padding:4px 12px; border-radius:999px; font-size:13px; font-weight:600; border-left:6px solid; cursor:pointer; opacity:0.55; transition:opacity .15s; }
+  .chip:hover { opacity:0.85; }
+  .chip.active { opacity:1; box-shadow:0 0 0 2px rgba(0,0,0,0.15) inset; }
   .sold { font-weight:700; }
   .sold-high { color:#e0442f; }
   .count { color:#888; font-size:13px; margin-bottom:8px; }
@@ -153,13 +155,41 @@ const PALETTE = [
 ];
 let storeColors = {};
 
+let activeStore = null; // null = 전체
+
+function storeTodayTotal(store) {
+  return rows
+    .filter((r) => r.store === store)
+    .reduce((sum, r) => sum + (r.todaySold || 0), 0);
+}
+
 function buildStoreColors() {
   const stores = [...new Set(rows.map((r) => r.store))].sort();
   storeColors = {};
   stores.forEach((st, i) => { storeColors[st] = PALETTE[i % PALETTE.length]; });
-  document.getElementById('legend').innerHTML = stores
-    .map((st) => `<span class="chip" style="background:${storeColors[st].bg};border-color:${storeColors[st].accent}">${st}</span>`)
+  renderLegend();
+}
+
+function renderLegend() {
+  const stores = Object.keys(storeColors);
+  const allChip = `<span class="chip${activeStore === null ? ' active' : ''}" data-store="" style="background:#eee;border-color:#999">전체 (오늘 ${rows.reduce((s, r) => s + (r.todaySold || 0), 0).toLocaleString()}개)</span>`;
+  const storeChips = stores
+    .map((st) => {
+      const c = storeColors[st];
+      const on = activeStore === st;
+      return `<span class="chip${on ? ' active' : ''}" data-store="${st}" style="background:${c.bg};border-color:${c.accent}">${st} (오늘 ${storeTodayTotal(st).toLocaleString()}개)</span>`;
+    })
     .join('');
+  const legend = document.getElementById('legend');
+  legend.innerHTML = allChip + storeChips;
+  legend.querySelectorAll('.chip').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      const st = chip.dataset.store;
+      activeStore = st === '' ? null : st;
+      renderLegend();
+      render();
+    });
+  });
 }
 
 function render() {
@@ -167,13 +197,15 @@ function render() {
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '';
 
-  const filtered = rows.filter(
-    (r) =>
+  const filtered = rows.filter((r) => {
+    if (activeStore !== null && r.store !== activeStore) return false;
+    return (
       !q ||
       r.store.toLowerCase().includes(q) ||
       (r.productName || '').toLowerCase().includes(q) ||
       (r.optionName || '').toLowerCase().includes(q)
-  );
+    );
+  });
 
   document.getElementById('count').textContent = `${filtered.length}개 옵션 표시중 (전체 ${rows.length}개)`;
 
