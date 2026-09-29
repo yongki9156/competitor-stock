@@ -5,11 +5,11 @@ cd /d "%~dp0"
 echo Opening product pages from list...
 for /f "usebackq delims=" %%u in ("products.txt") do (
   start "" "chrome.exe" "%%u"
-  timeout /t 2 /nobreak >nul
+  timeout /t 4 /nobreak >nul
 )
 
 echo Waiting for background sync to finish...
-timeout /t 20 /nobreak >nul
+timeout /t 45 /nobreak >nul
 
 echo Syncing product list to GitHub...
 git add -A
