@@ -2850,7 +2850,7 @@
     "optionName": "비접착식(7장) / 1_더 허브",
     "date": "2026-09-30",
     "stock": 9978,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWE1Ms5zyoCvc6EZli4e_8401133332_46448817422": {
@@ -2860,7 +2860,7 @@
     "optionName": "비접착식(7장) / 2_더 로맨틱",
     "date": "2026-09-30",
     "stock": 7414,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWE1Ms5zyoCvc6EZli4e_8401133332_46448817423": {
@@ -2870,7 +2870,7 @@
     "optionName": "비접착식(7장) / 3_더 포레스트",
     "date": "2026-09-30",
     "stock": 9932,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWE1Ms5zyoCvc6EZli4e_8401133332_46448817424": {
@@ -2880,7 +2880,7 @@
     "optionName": "비접착식(7장) / 4_더 스페이스",
     "date": "2026-09-30",
     "stock": 8350,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "32kskGVwPWOvxh2JI4IDj_13312563689_57194554125": {
