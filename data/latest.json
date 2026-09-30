@@ -3400,7 +3400,7 @@
     "optionName": "600x600x1.5mm_602",
     "date": "2026-09-30",
     "stock": 8842,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWDw6heJxQpbFscSivKR_7144692685_48247593700": {
@@ -3410,7 +3410,7 @@
     "optionName": "600x600x1.5mm_603",
     "date": "2026-09-30",
     "stock": 0,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWDw6heJxQpbFscSivKR_7144692685_48247593701": {
@@ -3420,7 +3420,7 @@
     "optionName": "600x600x1.5mm_604",
     "date": "2026-09-30",
     "stock": 8028,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWDw6heJxQpbFscSivKR_7144692685_48247593703": {
@@ -3430,7 +3430,7 @@
     "optionName": "600x600x1.5mm _606",
     "date": "2026-09-30",
     "stock": 0,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWDw6heJxQpbFscSivKR_7144692685_55972795402": {
@@ -3440,7 +3440,7 @@
     "optionName": "600x600x1.5mm _607",
     "date": "2026-09-30",
     "stock": 8534,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWDw6heJxQpbFscSivKR_7144692685_48247593707": {
@@ -3450,7 +3450,7 @@
     "optionName": "600x600x1.5mm_617",
     "date": "2026-09-30",
     "stock": 9183,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWDw6heJxQpbFscSivKR_7144692685_48247593709": {
@@ -3460,7 +3460,7 @@
     "optionName": "600x600x1.5mm _663",
     "date": "2026-09-30",
     "stock": 8886,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWDw6heJxQpbFscSivKR_7144692685_48247593712": {
@@ -3470,7 +3470,7 @@
     "optionName": "600x600x1.5mm _6011",
     "date": "2026-09-30",
     "stock": 0,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWDw6heJxQpbFscSivKR_7144692685_48247593715": {
@@ -3480,7 +3480,7 @@
     "optionName": "600x600x1.5mm_6064",
     "date": "2026-09-30",
     "stock": 8760,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWDw6heJxQpbFscSivKR_7144692685_48247593717": {
@@ -3490,7 +3490,7 @@
     "optionName": "600x600x1.5mm_609",
     "date": "2026-09-30",
     "stock": 9085,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWDw6heJxQpbFscSivKR_7144692685_55577897522": {
@@ -3500,7 +3500,7 @@
     "optionName": "600x600x1.5mm _673",
     "date": "2026-09-30",
     "stock": 848,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWDw6heJxQpbFscSivKR_7144692685_55972795403": {
@@ -3510,7 +3510,7 @@
     "optionName": "600x600x2.0mm_04",
     "date": "2026-09-30",
     "stock": 9588,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWDw6heJxQpbFscSivKR_7144692685_55972795404": {
@@ -3520,7 +3520,7 @@
     "optionName": "600x600x2.0mm_15",
     "date": "2026-09-30",
     "stock": 7868,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWDw6heJxQpbFscSivKR_7144692685_55577897510": {
@@ -3530,7 +3530,7 @@
     "optionName": "600x600x2.0mm_40",
     "date": "2026-09-30",
     "stock": 0,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWDw6heJxQpbFscSivKR_7144692685_55577897511": {
@@ -3540,7 +3540,7 @@
     "optionName": "600x600x2.0mm_59",
     "date": "2026-09-30",
     "stock": 8753,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWDw6heJxQpbFscSivKR_7144692685_55972795405": {
@@ -3550,7 +3550,7 @@
     "optionName": "600x600x2.0mm_62",
     "date": "2026-09-30",
     "stock": 0,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWDw6heJxQpbFscSivKR_7144692685_55577897513": {
@@ -3560,7 +3560,7 @@
     "optionName": "600x600x2.0mm_64",
     "date": "2026-09-30",
     "stock": 7380,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWDw6heJxQpbFscSivKR_7144692685_55577897514": {
@@ -3570,7 +3570,7 @@
     "optionName": "600x600x2.0mm_65",
     "date": "2026-09-30",
     "stock": 8929,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWDw6heJxQpbFscSivKR_7144692685_55577897515": {
@@ -3580,7 +3580,7 @@
     "optionName": "600x600x2.0mm_74",
     "date": "2026-09-30",
     "stock": 9446,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWDw6heJxQpbFscSivKR_7144692685_55577897516": {
@@ -3590,7 +3590,7 @@
     "optionName": "600x600x2.0mm_243",
     "date": "2026-09-30",
     "stock": 0,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWDw6heJxQpbFscSivKR_7144692685_55577897519": {
@@ -3600,7 +3600,7 @@
     "optionName": "600x600x2.0mm_245",
     "date": "2026-09-30",
     "stock": 9566,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWDw6heJxQpbFscSivKR_7144692685_55577897524": {
@@ -3610,7 +3610,7 @@
     "optionName": "600x600x2.0mm_674",
     "date": "2026-09-30",
     "stock": 9622,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWDw6heJxQpbFscSivKR_7144692685_55972795406": {
@@ -3620,7 +3620,7 @@
     "optionName": "600x600x2.0mm_676",
     "date": "2026-09-30",
     "stock": 9038,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   }
 }
