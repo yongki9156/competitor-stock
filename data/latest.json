@@ -3130,7 +3130,7 @@
     "optionName": "1. 접착식 / 마블 블루그레이",
     "date": "2026-09-30",
     "stock": 4844,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWE17LxhzMQWPBxKPRtX_11859874315_53143385517": {
@@ -3140,7 +3140,7 @@
     "optionName": "1. 접착식 / 마블 딥그레이",
     "date": "2026-09-30",
     "stock": 4957,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWE17LxhzMQWPBxKPRtX_11859874315_53143385520": {
@@ -3150,7 +3150,7 @@
     "optionName": "1. 접착식 / 마블화이트",
     "date": "2026-09-30",
     "stock": 481,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWE17LxhzMQWPBxKPRtX_11859874315_53143385525": {
@@ -3160,7 +3160,7 @@
     "optionName": "1. 접착식 / 실버화이트",
     "date": "2026-09-30",
     "stock": 5,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWE17LxhzMQWPBxKPRtX_11859874315_60056511936": {
@@ -3170,7 +3170,7 @@
     "optionName": "1. 접착식 / 허니스톤(그레이톤)",
     "date": "2026-09-30",
     "stock": 4936,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWE17LxhzMQWPBxKPRtX_11859874315_53143385529": {
@@ -3180,7 +3180,7 @@
     "optionName": "1. 접착식 / 그레이스톤",
     "date": "2026-09-30",
     "stock": 18,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWE17LxhzMQWPBxKPRtX_11859874315_53143385532": {
@@ -3190,7 +3190,7 @@
     "optionName": "1. 접착식 / 테라조그레이",
     "date": "2026-09-30",
     "stock": 4994,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWE17LxhzMQWPBxKPRtX_11859874315_53143385534": {
@@ -3200,7 +3200,7 @@
     "optionName": "1. 접착식 / 테라조베이지",
     "date": "2026-09-30",
     "stock": 4900,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWE17LxhzMQWPBxKPRtX_11859874315_53143385536": {
@@ -3210,7 +3210,7 @@
     "optionName": "1. 접착식 / 테라조스노우칩",
     "date": "2026-09-30",
     "stock": 0,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWE17LxhzMQWPBxKPRtX_11859874315_53143385539": {
@@ -3220,7 +3220,7 @@
     "optionName": "1. 접착식 / 테라조화이트",
     "date": "2026-09-30",
     "stock": 62,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWE17LxhzMQWPBxKPRtX_11859874315_60056511938": {
@@ -3230,7 +3230,7 @@
     "optionName": "1. 접착식 / 허니스톤(베이지톤)",
     "date": "2026-09-30",
     "stock": 143,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWE17LxhzMQWPBxKPRtX_11859874315_57580046551": {
@@ -3240,7 +3240,7 @@
     "optionName": "1. 접착식 / 오트 베이지",
     "date": "2026-09-30",
     "stock": 31,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWE17LxhzMQWPBxKPRtX_11859874315_57580046552": {
@@ -3250,7 +3250,7 @@
     "optionName": "1. 접착식 / 스톤 그레이",
     "date": "2026-09-30",
     "stock": 0,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWE17LxhzMQWPBxKPRtX_11859874315_57580046554": {
@@ -3260,7 +3260,7 @@
     "optionName": "1. 접착식 / 단색 실버",
     "date": "2026-09-30",
     "stock": 0,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWE17LxhzMQWPBxKPRtX_11859874315_57580046556": {
@@ -3270,7 +3270,7 @@
     "optionName": "1. 접착식 / 실버 마블",
     "date": "2026-09-30",
     "stock": 32,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWE17LxhzMQWPBxKPRtX_11859874315_54826228723": {
@@ -3280,7 +3280,7 @@
     "optionName": "2. 비접착식 / 마블화이트",
     "date": "2026-09-30",
     "stock": 455,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWE17LxhzMQWPBxKPRtX_11859874315_54826228725": {
@@ -3290,7 +3290,7 @@
     "optionName": "2. 비접착식 / 허니스톤",
     "date": "2026-09-30",
     "stock": 72,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWE17LxhzMQWPBxKPRtX_11859874315_54826228727": {
@@ -3300,7 +3300,7 @@
     "optionName": "2. 비접착식 / 오트 베이지",
     "date": "2026-09-30",
     "stock": 77,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWE17LxhzMQWPBxKPRtX_11859874315_54826228728": {
@@ -3310,7 +3310,7 @@
     "optionName": "2. 비접착식 / 실버 마블",
     "date": "2026-09-30",
     "stock": 365,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWE17LxhzMQWPBxKPRtX_11859874315_54826228729": {
@@ -3320,7 +3320,7 @@
     "optionName": "2. 비접착식 / 스톤 그레이",
     "date": "2026-09-30",
     "stock": 28,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWE17LxhzMQWPBxKPRtX_11859874315_54826228730": {
@@ -3330,7 +3330,7 @@
     "optionName": "2. 비접착식 / 모카 샌드",
     "date": "2026-09-30",
     "stock": 87,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWE17LxhzMQWPBxKPRtX_11859874315_54826228731": {
@@ -3340,7 +3340,7 @@
     "optionName": "2. 비접착식 / 마블 딥그레이",
     "date": "2026-09-30",
     "stock": 0,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWE17LxhzMQWPBxKPRtX_11859874315_54826228732": {
@@ -3350,7 +3350,7 @@
     "optionName": "2. 비접착식 / 단색 실버",
     "date": "2026-09-30",
     "stock": 7,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWE17LxhzMQWPBxKPRtX_11859874315_54826228733": {
@@ -3360,7 +3360,7 @@
     "optionName": "2. 비접착식 / 단색 딥그레이",
     "date": "2026-09-30",
     "stock": 8,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWE17LxhzMQWPBxKPRtX_11859874315_54826228734": {
@@ -3370,7 +3370,7 @@
     "optionName": "2. 비접착식 / 테라조 그레이",
     "date": "2026-09-30",
     "stock": 0,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWE17LxhzMQWPBxKPRtX_11859874315_54826228735": {
@@ -3380,7 +3380,7 @@
     "optionName": "2. 비접착식 / 테라로 베이지",
     "date": "2026-09-30",
     "stock": 16,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWE17LxhzMQWPBxKPRtX_11859874315_54826228736": {
@@ -3390,7 +3390,7 @@
     "optionName": "2. 비접착식 / 테라조 화이트",
     "date": "2026-09-30",
     "stock": 0,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWDw6heJxQpbFscSivKR_7144692685_48247593699": {
