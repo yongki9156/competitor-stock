@@ -16,6 +16,16 @@
   .btn { padding:9px 16px; border:1px solid #1f7a44; background:#22a55b; color:#fff; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; }
   .btn:hover { background:#1c8e4d; }
   .btn:disabled { opacity:.5; cursor:default; }
+  .btn2 { background:#fff; color:#1c8e4d; }
+  .btn2:hover { background:#eef8f1; }
+  .sf-top { display:flex; flex-wrap:wrap; gap:16px; align-items:center; font-size:14px; }
+  .sf-top select { padding:5px 8px; border:1px solid #ccc; border-radius:6px; font-size:14px; }
+  .sf-tier { font-weight:700; font-size:13px; color:#333; margin:12px 0 6px; padding-top:8px; border-top:1px solid #eee; }
+  .sf-sec { margin-bottom:10px; }
+  .sf-head { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:4px; }
+  .sf-copy { border:1px solid #22a55b; background:#22a55b; color:#fff; border-radius:6px; padding:3px 14px; font-size:13px; cursor:pointer; }
+  .sf-vals { display:flex; flex-wrap:wrap; gap:3px; font-size:11px; font-variant-numeric: tabular-nums; }
+  .sf-vals span { background:#f3f4f6; border-radius:4px; padding:2px 5px; color:#444; }
   input[type="text"] { width:100%; max-width:360px; padding:10px 14px; border:1px solid #ddd; border-radius:8px; font-size:14px; margin-bottom:12px; box-sizing:border-box; }
   .legend { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
   .chip { padding:4px 12px; border-radius:999px; font-size:13px; font-weight:600; border-left:6px solid; cursor:pointer; opacity:0.55; transition:opacity .15s; }
@@ -84,11 +94,29 @@
       <div class="updated" id="updated">데이터 불러오는 중...</div>
       <div id="mode" class="mode view"></div>
     </div>
-    <button class="btn" id="excelBtn" disabled>엑셀 다운로드</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn2" id="sheetBtn" disabled>기존 엑셀 붙여넣기용</button>
+      <button class="btn" id="excelBtn" disabled>엑셀 다운로드</button>
+    </div>
   </div>
 
   <input type="text" id="search" placeholder="스토어, 옵션 검색">
   <div class="legend" id="legend"></div>
+
+  <div class="card" id="sheetPanel" hidden style="margin-bottom:16px">
+    <div class="sf-top">
+      <b>기존 엑셀(네이버 판매량 예측) 붙여넣기</b>
+      <label>날짜 <select id="sfDay"></select></label>
+      <label>시간 <select id="sfHour">
+        <option value="9">09시 기록 (출근 칸)</option>
+        <option value="17">17시 기록 (9시~17시 칸)</option>
+        <option value="16">16시 기록</option>
+        <option value="18">18시 기록</option>
+      </select></label>
+    </div>
+    <div class="small" style="white-space:normal;margin:6px 0 10px">엑셀에서 그 날짜 칸의 '오늘재고' 줄, 안내된 열(예: G열)을 한 번 클릭하고 Ctrl+V 하면 옆으로 쭉 채워져요. 구역마다 복사 버튼을 따로 눌러야 해요 (중간의 TOTAL, 도든샘플 칸을 건드리지 않으려고).</div>
+    <div id="sfBody"></div>
+  </div>
 
   <div class="layout">
     <div class="card">
@@ -130,6 +158,7 @@ const DAY_CUTOFF_HOUR = 18;
 const REPO_API = 'https://api.github.com/repos/yongki9156/competitor-stock/contents/';
 
 let items = [];        // 추적중인 옵션 목록
+let allItems = [];     // latest.json 전체 (추적 끝난 상품 포함)
 let historyData = {};  // 시간별 재고 기록
 let dayData = {};      // { 'YYYY-MM-DD': { key: {s,u,k,from,to} } }
 let currentDay = '';   // 지금 진행중인 영업일
@@ -660,6 +689,187 @@ function renderAll() {
   renderTable();
 }
 
+// ---------------- 기존 엑셀(네이버 판매량 예측) 양식용 설정 ----------------
+// 각 칸이 어떤 상품 옵션인지 정리. 상품번호와 옵션 이름 일부(띄어쓰기, - 무시)로 찾음
+// 이름 끝에 $ 가 붙으면 옵션 이름이 그 글자로 끝나야 함 (비슷한 이름끼리 헷갈리지 않게)
+// 후보가 여러 개면 앞에서부터 기록 있는 상품을 씀
+const SHEET_HOURS = { morning: 9, evening: 17 }; // 출근 = 9시 기록, 9시~17시 = 17시 기록
+const DODEN_X = ['6941645716', '6972896159'];   // 테라조스톤470각 반평 후보
+const DODEN_INK = ['8401133332', '8425135325'];  // 더잉크 반평 후보
+const cand = (prods, key) => prods.map((p) => [p, key]);
+const SHEET_LAYOUT = [
+  { tier: 1, name: '도든', start: 'G', cols: [
+    ...['오트밀크림', '브레드버터', '내추럴라떼', '뉴트럴오트', '퓨어바닐라', '헤리티지크림', '코지그레이', '애쉬그레이', '토프베이지',
+      '테라조딥그레이', '테라조테라레드', '미스트라이트그레이', '미스트미드그레이', '미스트딥다크',
+      '로우콘크리트그레이', '로우콘크리트딥그레이', '로우콘크리트샌드'].map((k) => [['11763529292', '/' + k + '$']]),
+    ...['(D3)', '(D1)', '(D2)', '(D4)', '(D5)', '(D6)'].map((k) => cand(DODEN_X, k + '$')),
+    ...['더허브', '더로맨틱', '더포레스트', '더스페이스'].map((k) => cand(DODEN_INK, k + '$')),
+    ...['헤리티지샌드', '헤리티지크림', '헤리티지그레이', '어반바닐라', '어반스톤', '어반블렌딩', '매트그레이우드'].map((k) => [['9978717845', '/' + k]]),
+  ] },
+  { tier: 1, name: '데코사랑', start: 'AS', cols: [
+    'TI13N', 'TI03', 'TI02', 'TI07', 'TI08', 'TI05', 'TI06', 'TI20', 'TI21', 'TI14N', 'TI15', 'TI16', 'TI17',
+    'TI11', 'TI12', 'TI01', 'TI19', 'TI18', 'WTI31', 'WTI32', 'WTI33', 'WTI34', 'WTI35', 'WTI36', 'WTI37', 'WTI38',
+  ].map((k) => [['3987432580', '(' + k + ')']]) },
+  { tier: 1, name: 'ZIPAN', start: 'BW', cols: [
+    '1.5mm_602', '1.5mm_603', '1.5mm_604', '1.5mm_606', '1.5mm_607', '1.5mm_617', '1.5mm_663', '1.5mm_6011', '1.5mm_6064',
+    '1.5mm_609', '1.5mm_673', '2.0mm_04', '2.0mm_15', '2.0mm_40', '2.0mm_59', '2.0mm_62', '2.0mm_64', '2.0mm_65', '2.0mm_74',
+    '2.0mm_243', '2.0mm_245', '2.0mm_674', '2.0mm_676',
+  ].map((k) => [['7144692685', k + '$']]) },
+  { tier: 2, name: '룸스토어', start: 'G', cols: [
+    'MTS6151', 'MTS6152', 'MTS6153', 'MTS6154', 'MTS6161', 'MTS6162', 'MTS6163', 'MTS6164', 'MTS6112', 'MTS6111', 'MTS6132', 'MTS6131',
+    'MTS6141', 'MTS6142', 'MTS6143', 'MTS6144', 'NPT1633', 'NPT1627', 'DBT3089', 'DBT3088', 'DBT3086', 'DBT3091', 'DBT3082', 'DBT3081',
+  ].map((k) => [['10249302300', k]]) },
+  { tier: 2, name: '데코타일몰', start: 'AS', cols: [
+    'DBT3089', 'DBT3088', 'DBT3086', 'DBT3091', 'DBT3082', 'DBT3081', 'MTS6151', 'MTS6152', 'MTS6153', 'MTS6154', 'MTS6161', 'MTS6162',
+    'MTS6163', 'MTS6164', 'MTS6131', 'MTS6132', 'MTS6111', 'MTS6112', 'MTS6141', 'MTS6142', 'MTS6143', 'MTS6144', 'NPT1633', 'NPT1627',
+  ].map((k) => [['13312563689', '/' + k]]) },
+  { tier: 2, name: '아르빙', start: 'BW', cols: [
+    ...['마블블루그레이', '마블딥그레이', '마블화이트', '실버화이트', '허니스톤(그레이톤)', '그레이스톤', '테라조그레이', '테라조베이지',
+      '테라조스노우칩', '테라조화이트', '허니스톤(베이지톤)', '오트베이지', '스톤그레이', '단색실버', '실버마블'].map((k) => [['11859874315', '1.접착식/' + k + '$']]),
+    ...['마블화이트', '허니스톤', '오트베이지', '실버마블', '스톤그레이', '모카샌드', '마블딥그레이', '단색실버', '단색딥그레이',
+      '테라조그레이', '테라로베이지', '테라조화이트'].map((k) => [['11859874315', '2.비접착식/' + k + '$']]),
+  ] },
+];
+
+const normName = (s) => String(s || '').replace(/[\s-]/g, '');
+
+function colToNum(c) { let n = 0; for (const ch of c) n = n * 26 + (ch.charCodeAt(0) - 64); return n; }
+function numToCol(n) { let s = ''; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; }
+
+// 칸 설정에 맞는 옵션 키 찾기 (한 번 찾으면 기억)
+const sheetKeyCache = {};
+function findSheetKey(prod, key) {
+  const id = prod + '|' + key;
+  if (id in sheetKeyCache) return sheetKeyCache[id];
+  const ends = key.endsWith('$');
+  const k = normName(ends ? key.slice(0, -1) : key);
+  const found = allItems.find((it) => {
+    if (String(it.product) !== prod) return false;
+    const n = normName(it.optionName);
+    return ends ? n.endsWith(k) : n.includes(k);
+  });
+  return (sheetKeyCache[id] = found ? found.key : null);
+}
+
+// 그 날짜 그 시간의 재고 (정각 기록이 없으면 그 전 3시간 안의 가장 가까운 기록)
+function stockAt(key, day, hour) {
+  const rec = historyData[key];
+  if (!rec) return null;
+  for (let h = hour; h >= Math.max(0, hour - 3); h--) {
+    const t = `${day}T${pad(h)}:00`;
+    if (rec[t] != null) return { v: rec[t], t, exact: h === hour };
+  }
+  return null;
+}
+
+// 한 구역(예: 도든 G~AN) 값 목록
+function sectionValues(sec, day, hour) {
+  return sec.cols.map((cands) => {
+    for (const [prod, key] of cands) {
+      const k = findSheetKey(prod, key);
+      if (!k) continue;
+      const s = stockAt(k, day, hour);
+      if (s) return s;
+    }
+    return null;
+  });
+}
+
+function sectionRange(sec) {
+  const s = colToNum(sec.start);
+  return `${sec.start}~${numToCol(s + sec.cols.length - 1)}`;
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  }
+}
+
+function renderSheetPanel() {
+  const panel = document.getElementById('sheetPanel');
+  if (panel.hidden) return;
+  const daySel = document.getElementById('sfDay');
+  const hourSel = document.getElementById('sfHour');
+  const days = [...new Set(allItems.flatMap((it) => Object.keys(historyData[it.key] || {}).map((t) => t.slice(0, 10))))].sort().reverse();
+  if (!daySel.options.length || daySel.dataset.sig !== days.join()) {
+    const keep = daySel.value;
+    daySel.innerHTML = days.map((d) => `<option value="${d}">${d}</option>`).join('');
+    daySel.dataset.sig = days.join();
+    if (keep && days.includes(keep)) daySel.value = keep;
+  }
+  const day = daySel.value;
+  const hour = Number(hourSel.value);
+
+  let html = '';
+  [1, 2].forEach((tier) => {
+    html += `<div class="sf-tier">${tier === 1 ? '첫째 칸 (도든 · 데코사랑 · ZIPAN) 오늘재고 줄' : '둘째 칸 (룸스토어 · 데코타일몰 · 아르빙) 오늘재고 줄'}</div>`;
+    SHEET_LAYOUT.filter((s) => s.tier === tier).forEach((sec) => {
+      const vals = sectionValues(sec, day, hour);
+      const miss = vals.filter((v) => !v).length;
+      const approx = vals.filter((v) => v && !v.exact).length;
+      const idx = SHEET_LAYOUT.indexOf(sec);
+      html += `<div class="sf-sec">
+        <div class="sf-head">
+          <b>${esc(sec.name)}</b><span class="small">${sectionRange(sec)} (${sec.cols.length}칸) · ${sec.start}칸 클릭 후 붙여넣기</span>
+          <button class="sf-copy" data-sec="${idx}">복사</button>
+          ${miss ? `<span class="sus">${miss}칸 기록 없음 (빈칸으로 복사됨)</span>` : ''}
+          ${approx ? `<span class="unk">${approx}칸은 정각 기록이 없어 직전 기록 사용</span>` : ''}
+        </div>
+        <div class="sf-vals">${vals.map((v, i) => `<span title="${numToCol(colToNum(sec.start) + i)}열">${v ? v.v.toLocaleString() : '·'}</span>`).join('')}</div>
+      </div>`;
+    });
+  });
+  document.getElementById('sfBody').innerHTML = html;
+  document.querySelectorAll('.sf-copy').forEach((b) => {
+    b.addEventListener('click', async () => {
+      const sec = SHEET_LAYOUT[Number(b.dataset.sec)];
+      const vals = sectionValues(sec, day, hour);
+      const ok = await copyText(vals.map((v) => (v ? v.v : '')).join('\t'));
+      b.textContent = ok ? '복사됨' : '복사 실패';
+      setTimeout(() => { b.textContent = '복사'; }, 1500);
+    });
+  });
+}
+
+// 엑셀 다운로드용: 기존 양식과 같은 열 위치에 값을 채운 시트
+function buildSheetFormRows() {
+  const days = [...new Set(allItems.flatMap((it) => Object.keys(historyData[it.key] || {}).map((t) => t.slice(0, 10))))].sort();
+  const maxCol = Math.max(...SHEET_LAYOUT.map((s) => colToNum(s.start) + s.cols.length - 1));
+  const rows = [];
+  const header = new Array(maxCol).fill('');
+  header[0] = '날짜/시간';
+  header[5] = '구분';
+  SHEET_LAYOUT.forEach((sec) => { header[colToNum(sec.start) - 1] = `${sec.name} →`; });
+  rows.push(header);
+  days.forEach((day) => {
+    [['출근', SHEET_HOURS.morning], ['9시~17시', SHEET_HOURS.evening]].forEach(([label, hour]) => {
+      [1, 2].forEach((tier) => {
+        const row = new Array(maxCol).fill('');
+        row[0] = `${day.slice(2).replace(/-/g, '')}(${label})`;
+        row[5] = tier === 1 ? '도든/데코사랑/ZIPAN' : '룸스토어/데코타일몰/아르빙';
+        let any = false;
+        SHEET_LAYOUT.filter((s) => s.tier === tier).forEach((sec) => {
+          sectionValues(sec, day, hour).forEach((v, i) => {
+            if (v) { row[colToNum(sec.start) - 1 + i] = v.v; any = true; }
+          });
+        });
+        if (any) rows.push(row);
+      });
+    });
+  });
+  return rows;
+}
+
 // ---------------- 엑셀 다운로드 ----------------
 function downloadExcel() {
   if (typeof XLSX === 'undefined') { alert('엑셀 기능을 불러오지 못했어요. 새로고침 후 다시 눌러주세요.'); return; }
@@ -730,6 +940,11 @@ function downloadExcel() {
   ws4['!cols'] = [{ wch: 12 }, { wch: 17 }, { wch: 12 }, { wch: 30 }, { wch: 40 }, { wch: 9 }, { wch: 60 }, { wch: 10 }];
   XLSX.utils.book_append_sheet(wb, ws4, '수동변경의심');
 
+  // 5. 기존 엑셀 양식과 같은 열 위치 (G열, AS열, BW열 등)에 재고를 채운 시트
+  const ws5 = XLSX.utils.aoa_to_sheet(buildSheetFormRows());
+  ws5['!cols'] = [{ wch: 18 }, {}, {}, {}, {}, { wch: 24 }];
+  XLSX.utils.book_append_sheet(wb, ws5, '기존양식_재고');
+
   const now = new Date();
   const name = `판매량기록_${ymd(now).replace(/-/g, '')}_${pad(now.getHours())}${pad(now.getMinutes())}.xlsx`;
   const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
@@ -793,6 +1008,8 @@ async function loadData(isRefresh) {
   const sourceLabel = historyF.source === 'github' ? '깃허브 원본' : '페이지스 사본(수 분 늦을 수 있음)';
 
   items = Object.entries(latest).map(([key, it]) => Object.assign({ key }, it));
+  allItems = items.slice();
+  Object.keys(sheetKeyCache).forEach((k) => delete sheetKeyCache[k]);
   if (active) items = items.filter((it) => active.has(String(it.product)));
 
   if (!items.length) {
@@ -824,11 +1041,24 @@ async function loadData(isRefresh) {
   stores.forEach((st, i) => { storeColors[st] = PALETTE[i % PALETTE.length]; });
 
   document.getElementById('excelBtn').disabled = false;
+  document.getElementById('sheetBtn').disabled = false;
+  renderSheetPanel();
   renderAll();
 }
 
 document.getElementById('search').addEventListener('input', renderAll);
 document.getElementById('excelBtn').addEventListener('click', downloadExcel);
+document.getElementById('sheetBtn').addEventListener('click', () => {
+  const p = document.getElementById('sheetPanel');
+  p.hidden = !p.hidden;
+  if (!p.hidden) {
+    const h = new Date().getHours();
+    document.getElementById('sfHour').value = h >= 17 ? '17' : '9';
+    renderSheetPanel();
+  }
+});
+document.getElementById('sfDay').addEventListener('change', renderSheetPanel);
+document.getElementById('sfHour').addEventListener('change', renderSheetPanel);
 document.getElementById('prevM').addEventListener('click', () => {
   calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1);
   renderCalendar();
