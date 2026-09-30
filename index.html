@@ -2,54 +2,134 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>경쟁사 판매량 추적 대시보드</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   body { font-family: -apple-system, "Malgun Gothic", sans-serif; background:#f5f5f7; margin:0; padding:24px; color:#222; }
-  h1 { font-size:20px; margin-bottom:4px; }
-  .updated { color:#888; font-size:13px; margin-bottom:16px; }
-  input[type="text"] { width:100%; max-width:360px; padding:10px 14px; border:1px solid #ddd; border-radius:8px; font-size:14px; margin-bottom:16px; box-sizing:border-box; }
-  table { width:100%; border-collapse:collapse; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.08); }
-  th, td { padding:10px 14px; text-align:left; font-size:14px; border-bottom:1px solid #eee; white-space:nowrap; }
-  th { background:#fafafa; color:#555; position:sticky; top:0; cursor:pointer; user-select:none; }
-  tbody tr { cursor:pointer; }
-  tbody tr:hover { filter:brightness(0.95); }
-  .legend { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .top { display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:12px; margin-bottom:16px; }
+  .updated { color:#888; font-size:13px; }
+  .btn { padding:9px 16px; border:1px solid #1f7a44; background:#22a55b; color:#fff; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; }
+  .btn:hover { background:#1c8e4d; }
+  .btn:disabled { opacity:.5; cursor:default; }
+  input[type="text"] { width:100%; max-width:360px; padding:10px 14px; border:1px solid #ddd; border-radius:8px; font-size:14px; margin-bottom:12px; box-sizing:border-box; }
+  .legend { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
   .chip { padding:4px 12px; border-radius:999px; font-size:13px; font-weight:600; border-left:6px solid; cursor:pointer; opacity:0.55; transition:opacity .15s; }
   .chip:hover { opacity:0.85; }
   .chip.active { opacity:1; box-shadow:0 0 0 2px rgba(0,0,0,0.15) inset; }
+
+  .layout { display:grid; grid-template-columns: 360px 1fr; gap:16px; align-items:start; }
+  @media (max-width: 1000px) { .layout { grid-template-columns: 1fr; } }
+  .card { background:#fff; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,0.08); padding:16px; }
+
+  .cal-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .cal-head b { font-size:16px; }
+  .cal-nav { border:1px solid #ddd; background:#fff; border-radius:6px; width:32px; height:28px; cursor:pointer; font-size:14px; }
+  .cal-grid { display:grid; grid-template-columns: repeat(7, 1fr); gap:4px; }
+  .cal-dow { text-align:center; font-size:12px; color:#888; padding:4px 0; }
+  .cal-dow.sun { color:#e0442f; } .cal-dow.sat { color:#3b82f6; }
+  .cal-day { border:1px solid #eee; border-radius:6px; min-height:52px; padding:4px 5px; font-size:12px; cursor:pointer; position:relative; background:#fff; }
+  .cal-day .n { color:#666; }
+  .cal-day .v { display:block; margin-top:2px; font-weight:700; font-size:13px; text-align:right; }
+  .cal-day .live { display:block; font-size:10px; color:#e0442f; font-weight:700; line-height:1.2; }
+  .cal-day.empty { cursor:default; background:#fafafa; color:#ccc; }
+  .cal-day.empty .n { color:#ccc; }
+  .cal-day.blank { border:none; background:transparent; cursor:default; }
+  .cal-day.sel { outline:2px solid #222; outline-offset:-1px; }
+  .cal-note { color:#999; font-size:12px; margin-top:10px; line-height:1.5; }
+
+  .day-title { font-size:17px; font-weight:700; margin:0 0 2px; }
+  .day-sub { color:#888; font-size:13px; margin-bottom:12px; }
+  .count { color:#888; font-size:13px; margin-bottom:8px; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { padding:9px 12px; text-align:left; font-size:14px; border-bottom:1px solid #eee; }
+  th { background:#fafafa; color:#555; cursor:pointer; user-select:none; white-space:nowrap; }
+  td.num, th.num { text-align:right; white-space:nowrap; }
+  tbody tr.row { cursor:pointer; }
+  tbody tr.row:hover { filter:brightness(0.95); }
   .sold { font-weight:700; }
   .sold-high { color:#e0442f; }
-  .count { color:#888; font-size:13px; margin-bottom:8px; }
-  .hint { color:#aaa; font-size:12px; margin-bottom:12px; }
   .unk { font-weight:400; font-size:11px; color:#999; cursor:help; }
+  .small { font-size:12px; color:#666; white-space:nowrap; }
+
+  tr.detail td { background:#fcfcfd; padding:12px 16px 16px; }
+  .detail-head { display:flex; gap:12px; align-items:center; margin-bottom:8px; font-size:13px; color:#555; }
+  .detail-head button { border:1px solid #ccc; background:#fff; border-radius:6px; padding:3px 10px; font-size:12px; cursor:pointer; }
+  .recs { display:grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap:4px 16px; font-size:13px; font-variant-numeric: tabular-nums; }
+  .recs .r { display:flex; justify-content:space-between; gap:8px; padding:2px 0; border-bottom:1px dotted #eee; }
+  .recs .d { color:#e0442f; font-weight:700; }
+  .recs .p { color:#3b82f6; }
+  .recs .base { color:#aaa; }
+  .recs .dayhdr { grid-column: 1 / -1; font-weight:700; margin-top:8px; color:#333; }
 </style>
 </head>
 <body>
-  <h1>경쟁사 판매량 추적 대시보드</h1>
-  <div class="updated" id="updated">데이터 불러오는 중...</div>
-  <input type="text" id="search" placeholder="스토어, 상품명, 옵션 검색">
-  <div class="count" id="count"></div>
-  <div class="legend" id="legend"></div>
-  <div class="hint">줄을 클릭하면 시간대별 재고 기록을 볼 수 있음 · 회색 '기간불명'은 기록이 비어 있던 동안 줄어든 양(언제 팔렸는지 알 수 없어 따로 표시, 위 숫자에는 미포함)</div>
+  <div class="top">
+    <div>
+      <h1>경쟁사 판매량 추적 대시보드</h1>
+      <div class="updated" id="updated">데이터 불러오는 중...</div>
+    </div>
+    <button class="btn" id="excelBtn" disabled>엑셀 다운로드</button>
+  </div>
 
-  <table id="table">
-    <thead>
-      <tr>
-        <th data-key="store">스토어</th>
-        <th data-key="productName">상품명</th>
-        <th data-key="optionName">옵션</th>
-        <th>최근확인</th>
-        <th data-key="stock">현재 재고</th>
-        <th data-key="yestSold">어제 판매<br><span style="font-weight:400;font-size:11px;color:#999">그제18시~어제18시</span></th>
-        <th data-key="todaySold">오늘 누적판매<br><span style="font-weight:400;font-size:11px;color:#999">어제18시~지금</span></th>
-      </tr>
-    </thead>
-    <tbody id="tbody"></tbody>
-  </table>
+  <input type="text" id="search" placeholder="스토어, 옵션 검색">
+  <div class="legend" id="legend"></div>
+
+  <div class="layout">
+    <div class="card">
+      <div class="cal-head">
+        <button class="cal-nav" id="prevM">&lt;</button>
+        <b id="calTitle"></b>
+        <button class="cal-nav" id="nextM">&gt;</button>
+      </div>
+      <div class="cal-grid" id="cal"></div>
+      <div class="cal-note">
+        날짜 칸 숫자는 그날 판매량 합계예요 (위에서 고른 스토어 기준).<br>
+        하루는 전날 18시부터 그날 18시까지예요. 18시가 지나면 다음 날짜로 넘어가요.<br>
+        빨간 '진행중'은 아직 마감 전이라 계속 늘어나는 날이에요.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="day-title" id="dayTitle"></div>
+      <div class="day-sub" id="daySub"></div>
+      <div class="count" id="count"></div>
+      <table>
+        <thead>
+          <tr>
+            <th data-key="store">스토어</th>
+            <th data-key="optionName">옵션</th>
+            <th data-key="s" class="num">판매량</th>
+            <th data-key="k" class="num" id="stockHead">마감 재고</th>
+            <th data-key="last" class="num">최근확인</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
 
 <script>
-let rows = [];
-let historyData = {};
+const DAY_CUTOFF_HOUR = 18;
+const REPO_API = 'https://api.github.com/repos/yongki9156/competitor-stock/contents/';
+
+let items = [];        // 추적중인 옵션 목록
+let historyData = {};  // 시간별 재고 기록
+let dayData = {};      // { 'YYYY-MM-DD': { key: {s,u,k,from,to} } }
+let currentDay = '';   // 지금 진행중인 영업일
+let selectedDay = '';
+let calMonth = null;   // 달력에 보이는 달 (1일 날짜)
+let activeStore = null;
+let openKey = null;    // 기록 펼친 줄
+let showAllFor = null; // 전체 기록 펼친 줄
+let sortKey = 's';
+let sortAsc = false;
+
+// ---------------- 날짜 계산 ----------------
+const pad = (n) => String(n).padStart(2, '0');
+const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 function toDate(key) {
   const [d, t = '00:00'] = key.split('T');
@@ -58,91 +138,106 @@ function toDate(key) {
   return new Date(y, m - 1, day, hh || 0, mm || 0);
 }
 
-// 기준 구간(startDate~endDate) 안의 판매량 계산
-// measured : 구간 안에서 기록이 이어져 실제로 측정된 감소량의 합
-// unknown  : 구간 시작 전 마지막 기록 ~ 구간 첫 기록 사이에 줄어든 양 (기록이 비어 있어 언제 팔렸는지 알 수 없음)
-function computeWindowTotal(rec, startDate, endDate) {
+function bizDayOf(dt) {
+  const d = new Date(dt);
+  if (d.getHours() > DAY_CUTOFF_HOUR || (d.getHours() === DAY_CUTOFF_HOUR && d.getMinutes() > 0)) {
+    d.setDate(d.getDate() + 1);
+  }
+  return ymd(d);
+}
+
+function dayWindow(day) {
+  const end = toDate(day);
+  end.setHours(DAY_CUTOFF_HOUR, 0, 0, 0);
+  const start = new Date(end);
+  start.setDate(start.getDate() - 1);
+  return { start, end };
+}
+
+function fmtDT(d) {
+  return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// 구간 판매량 계산 (탬퍼몽키 스크립트와 같은 방식)
+// s: 기록이 이어져 측정된 판매량 / u: 기록이 비어 언제 팔렸는지 모르는 감소량 / k: 구간 마지막 재고
+function computeWindow(rec, start, end) {
   const entries = Object.keys(rec)
     .map((k) => ({ dt: toDate(k), v: rec[k] }))
     .sort((a, b) => a.dt - b.dt);
-  if (!entries.length) return null;
-
-  const before = entries.filter((e) => e.dt <= startDate).pop();
-  const within = entries.filter((e) => e.dt > startDate && e.dt <= endDate);
+  const before = entries.filter((e) => e.dt <= start).pop();
+  const within = entries.filter((e) => e.dt > start && e.dt <= end);
   if (!within.length) return null;
 
-  // 기록이 기준시각 정각에 있으면 그 기록부터 측정 구간으로 본다
-  const baselineInside = before && before.dt.getTime() === startDate.getTime();
+  const baselineInside = before && before.dt.getTime() === start.getTime();
   const chain = baselineInside ? [before, ...within] : within;
-  if (chain.length < 2 && !before) return null;
 
-  let measured = 0;
+  let s = 0;
   for (let i = 1; i < chain.length; i++) {
     const diff = chain[i - 1].v - chain[i].v;
-    if (diff > 0) measured += diff;
+    if (diff > 0) s += diff;
   }
-
-  let unknown = 0;
-  let unknownSince = null;
+  let u = 0;
+  let from = null;
   if (before && !baselineInside) {
     const diff = before.v - within[0].v;
-    if (diff > 0) {
-      unknown = diff;
-      unknownSince = before.dt;
+    if (diff > 0) { u = diff; from = before.dt; }
+  }
+  return { s, u, k: within[within.length - 1].v, base: !!before, from, to: within[0].dt };
+}
+
+// 모든 옵션의 날짜별 판매량 만들기
+// 시간별 기록이 남아있는 날은 기록으로 계산, 14일 지나 지워진 날은 latest.json 에 보관된 값 사용
+function buildDayData(now) {
+  dayData = {};
+  currentDay = bizDayOf(now);
+  items.forEach((it) => {
+    const rec = historyData[it.key] || {};
+    const archive = it.daily || {};
+    const days = new Set(Object.keys(archive));
+    const keys = Object.keys(rec).sort();
+    if (keys.length) {
+      const d = toDate(bizDayOf(toDate(keys[0])));
+      for (let g = 0; g < 400; g++) {
+        const day = ymd(d);
+        if (day > currentDay) break;
+        days.add(day);
+        d.setDate(d.getDate() + 1);
+      }
     }
-  }
-  return { measured, unknown, unknownSince };
+    days.forEach((day) => {
+      const { start, end } = dayWindow(day);
+      const r = computeWindow(rec, start, day === currentDay ? now : end);
+      let v = null;
+      if (r && (r.base || !archive[day])) v = r;
+      else if (archive[day]) v = { s: archive[day].s, u: archive[day].u, k: archive[day].k, archived: true };
+      if (!v) return;
+      (dayData[day] = dayData[day] || {})[it.key] = v;
+    });
+  });
 }
 
-function fmtDate(d) {
-  const p = (n) => String(n).padStart(2, '0');
-  return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+// ---------------- 필터 ----------------
+function matchFilter(it) {
+  if (activeStore !== null && it.store !== activeStore) return false;
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  return !q || it.store.toLowerCase().includes(q) || (it.optionName || '').toLowerCase().includes(q);
 }
 
-function soldCell(r) {
-  if (!r) return '-';
-  let html = `${r.measured.toLocaleString()}개`;
-  if (r.unknown > 0) {
-    const tip = `마지막 기록(${fmtDate(r.unknownSince)})과 이 구간 첫 기록 사이에 줄어든 양. 그 사이 기록이 없어 언제 팔렸는지 알 수 없음`;
-    html += `<br><span class="unk" title="${tip}">+${r.unknown.toLocaleString()} 기간불명</span>`;
-  }
-  return html;
+function dayTotal(day, storeOnly) {
+  const dd = dayData[day];
+  if (!dd) return null;
+  let sum = 0;
+  let any = false;
+  items.forEach((it) => {
+    if (storeOnly !== undefined && storeOnly !== null && it.store !== storeOnly) return;
+    if (storeOnly === undefined && !matchFilter(it)) return;
+    const v = dd[it.key];
+    if (v) { sum += v.s; any = true; }
+  });
+  return any ? sum : null;
 }
 
-function bizBoundaries(now) {
-  // 하루 기준: 전날 18:00 ~ 오늘 18:00 (사용자 지정)
-  const y = new Date(now);
-  y.setDate(y.getDate() - 1);
-  y.setHours(18, 0, 0, 0);
-
-  const currentStart = y;
-  const currentEnd = now;
-  const prevEnd = new Date(y);
-  const prevStart = new Date(y);
-  prevStart.setDate(prevStart.getDate() - 1);
-
-  return { currentStart, currentEnd, prevStart, prevEnd };
-}
-
-function formatTs(t) {
-  if (!t) return '-';
-  return t.replace('T', ' ');
-}
-
-function latestEntry(rec) {
-  const allTs = Object.keys(rec).sort();
-  if (!allTs.length) return null;
-  const t = allTs[allTs.length - 1];
-  return { time: t, stock: rec[t] };
-}
-
-function showDetail(key, label) {
-  const rec = historyData[key] || {};
-  const entries = Object.keys(rec).sort().slice(-72);
-  const lines = entries.map((t) => `${t}   ${rec[t].toLocaleString()}개`).join('\n');
-  alert(`${label}\n(최근 기록, 시간 : 재고)\n\n${lines || '기록 없음'}`);
-}
-
+// ---------------- 스토어 칩 ----------------
 const PALETTE = [
   { bg: '#e8f1ff', accent: '#3b82f6' },
   { bg: '#fff1e0', accent: '#f59e0b' },
@@ -155,84 +250,281 @@ const PALETTE = [
 ];
 let storeColors = {};
 
-let activeStore = null; // null = 전체
-
-function storeTodayTotal(store) {
-  return rows
-    .filter((r) => r.store === store)
-    .reduce((sum, r) => sum + (r.todaySold || 0), 0);
-}
-
-function buildStoreColors() {
-  const stores = [...new Set(rows.map((r) => r.store))].sort();
-  storeColors = {};
-  stores.forEach((st, i) => { storeColors[st] = PALETTE[i % PALETTE.length]; });
-  renderLegend();
-}
-
 function renderLegend() {
   const stores = Object.keys(storeColors);
-  const allChip = `<span class="chip${activeStore === null ? ' active' : ''}" data-store="" style="background:#eee;border-color:#999">전체 (오늘 ${rows.reduce((s, r) => s + (r.todaySold || 0), 0).toLocaleString()}개)</span>`;
-  const storeChips = stores
-    .map((st) => {
-      const c = storeColors[st];
-      const on = activeStore === st;
-      return `<span class="chip${on ? ' active' : ''}" data-store="${st}" style="background:${c.bg};border-color:${c.accent}">${st} (오늘 ${storeTodayTotal(st).toLocaleString()}개)</span>`;
-    })
-    .join('');
+  const label = selectedDay === currentDay ? '오늘' : `${Number(selectedDay.slice(5, 7))}/${Number(selectedDay.slice(8))}`;
+  const all = dayTotal(selectedDay, null) || 0;
+  let html = `<span class="chip${activeStore === null ? ' active' : ''}" data-store="" style="background:#eee;border-color:#999">전체 (${label} ${all.toLocaleString()}개)</span>`;
+  html += stores.map((st) => {
+    const c = storeColors[st];
+    const t = dayTotal(selectedDay, st) || 0;
+    return `<span class="chip${activeStore === st ? ' active' : ''}" data-store="${esc(st)}" style="background:${c.bg};border-color:${c.accent}">${esc(st)} (${label} ${t.toLocaleString()}개)</span>`;
+  }).join('');
   const legend = document.getElementById('legend');
-  legend.innerHTML = allChip + storeChips;
+  legend.innerHTML = html;
   legend.querySelectorAll('.chip').forEach((chip) => {
     chip.addEventListener('click', () => {
-      const st = chip.dataset.store;
-      activeStore = st === '' ? null : st;
-      renderLegend();
-      render();
+      activeStore = chip.dataset.store === '' ? null : chip.dataset.store;
+      renderAll();
     });
   });
 }
 
-function render() {
-  const q = document.getElementById('search').value.trim().toLowerCase();
-  const tbody = document.getElementById('tbody');
-  tbody.innerHTML = '';
+// ---------------- 달력 ----------------
+function renderCalendar() {
+  const y = calMonth.getFullYear();
+  const m = calMonth.getMonth();
+  document.getElementById('calTitle').textContent = `${y}년 ${m + 1}월`;
+  const first = new Date(y, m, 1);
+  const lastDate = new Date(y, m + 1, 0).getDate();
 
-  const filtered = rows.filter((r) => {
-    if (activeStore !== null && r.store !== activeStore) return false;
-    return (
-      !q ||
-      r.store.toLowerCase().includes(q) ||
-      (r.productName || '').toLowerCase().includes(q) ||
-      (r.optionName || '').toLowerCase().includes(q)
-    );
-  });
+  const totals = {};
+  let max = 0;
+  for (let d = 1; d <= lastDate; d++) {
+    const day = ymd(new Date(y, m, d));
+    const t = dayTotal(day);
+    totals[day] = t;
+    if (t && t > max) max = t;
+  }
 
-  document.getElementById('count').textContent = `${filtered.length}개 옵션 표시중 (전체 ${rows.length}개)`;
-
-  filtered.forEach((item) => {
-    const tr = document.createElement('tr');
-    const color = storeColors[item.store];
-    if (color) tr.style.background = color.bg;
-    const yestClass = item.yestSold !== null && item.yestSold >= 10 ? 'sold sold-high' : 'sold';
-    const todayClass = item.todaySold !== null && item.todaySold >= 10 ? 'sold sold-high' : 'sold';
-    const latest = latestEntry(historyData[item.key] || {});
-    const latestText = latest ? `${formatTs(latest.time)}<br>${latest.stock.toLocaleString()}개` : '-';
-    tr.innerHTML = `
-      <td style="font-weight:600;border-left:6px solid ${color ? color.accent : 'transparent'}">${item.store}</td>
-      <td>${item.productName || ''}</td>
-      <td>${item.optionName || ''}</td>
-      <td style="font-size:12px;color:#666">${latestText}</td>
-      <td>${item.stock.toLocaleString()}개</td>
-      <td class="${yestClass}">${soldCell(item.yestDetail)}</td>
-      <td class="${todayClass}">${soldCell(item.todayDetail)}</td>
-    `;
-    tr.addEventListener('click', () => showDetail(item.key, `${item.store} / ${item.optionName}`));
-    tbody.appendChild(tr);
+  let html = ['일', '월', '화', '수', '목', '금', '토']
+    .map((w, i) => `<div class="cal-dow${i === 0 ? ' sun' : i === 6 ? ' sat' : ''}">${w}</div>`).join('');
+  for (let i = 0; i < first.getDay(); i++) html += '<div class="cal-day blank"></div>';
+  for (let d = 1; d <= lastDate; d++) {
+    const day = ymd(new Date(y, m, d));
+    const t = totals[day];
+    const has = !!dayData[day];
+    const cls = ['cal-day'];
+    if (!has) cls.push('empty');
+    if (day === selectedDay) cls.push('sel');
+    const alpha = t && max ? 0.08 + 0.35 * (t / max) : 0;
+    const style = alpha ? `style="background:rgba(59,130,246,${alpha.toFixed(2)})"` : '';
+    html += `<div class="${cls.join(' ')}" data-day="${day}" ${style}>
+      <span class="n">${d}</span>${day === currentDay ? '<span class="live">진행중</span>' : ''}
+      ${has ? `<span class="v">${(t || 0).toLocaleString()}</span>` : ''}
+    </div>`;
+  }
+  const cal = document.getElementById('cal');
+  cal.innerHTML = html;
+  cal.querySelectorAll('.cal-day[data-day]').forEach((el) => {
+    if (el.classList.contains('empty')) return;
+    el.addEventListener('click', () => {
+      selectedDay = el.dataset.day;
+      openKey = null;
+      showAllFor = null;
+      renderAll();
+    });
   });
 }
 
-const REPO_API = 'https://api.github.com/repos/yongki9156/competitor-stock/contents/';
+// ---------------- 선택한 날 표 ----------------
+function soldCell(v) {
+  if (!v) return '-';
+  let html = `${v.s.toLocaleString()}개`;
+  if (v.u > 0) {
+    const tip = v.from
+      ? `${fmtDT(v.from)} 기록과 ${fmtDT(v.to)} 기록 사이에 줄어든 양. 그 사이 기록이 없어 언제 팔렸는지 알 수 없음`
+      : '기록이 비어 있던 동안 줄어든 양';
+    html += `<br><span class="unk" title="${tip}">+${v.u.toLocaleString()} 기간불명</span>`;
+  }
+  return html;
+}
 
+function lastRecord(key) {
+  const rec = historyData[key] || {};
+  const ts = Object.keys(rec).sort().pop();
+  return ts ? { t: ts, v: rec[ts] } : null;
+}
+
+function recordsHtml(key, day, all) {
+  const rec = historyData[key] || {};
+  const entries = Object.keys(rec).sort().map((t) => ({ t, dt: toDate(t), v: rec[t] }));
+  if (!entries.length) return '<div class="small">시간별 기록 없음 (14일 지난 기록은 일별 합계만 남아 있음)</div>';
+
+  let list;
+  if (all) {
+    list = entries;
+  } else {
+    const { start, end } = dayWindow(day);
+    const before = entries.filter((e) => e.dt <= start).pop();
+    list = entries.filter((e) => e.dt > start && e.dt <= end);
+    if (before) list = [Object.assign({ base: true }, before), ...list];
+  }
+  if (!list.length) return '<div class="small">이 날 기록 없음</div>';
+
+  let html = '<div class="recs">';
+  let lastDay = '';
+  let prev = null;
+  if (all) {
+    list.forEach((e) => {
+      const bd = bizDayOf(e.dt);
+      if (bd !== lastDay) { html += `<div class="dayhdr">${bd} 영업일</div>`; lastDay = bd; }
+      html += recLine(e, prev);
+      prev = e;
+    });
+  } else {
+    list.forEach((e) => { html += recLine(e, prev); prev = e; });
+  }
+  return html + '</div>';
+}
+
+function recLine(e, prev) {
+  let diff = '';
+  if (e.base) diff = '<span class="base">전날 기준</span>';
+  else if (prev) {
+    const d = prev.v - e.v;
+    if (d > 0) diff = `<span class="d">-${d.toLocaleString()}</span>`;
+    else if (d < 0) diff = `<span class="p">+${(-d).toLocaleString()} 입고</span>`;
+    else diff = '<span class="base">변화없음</span>';
+  }
+  return `<div class="r"><span>${fmtDT(e.dt)}</span><span>${e.v.toLocaleString()}개</span><span>${diff}</span></div>`;
+}
+
+function renderTable() {
+  const live = selectedDay === currentDay;
+  const { start, end } = dayWindow(selectedDay);
+  const [yy, mm, dd] = selectedDay.split('-').map(Number);
+  document.getElementById('dayTitle').textContent = `${yy}년 ${mm}월 ${dd}일 판매량${live ? ' (진행중)' : ''}`;
+  document.getElementById('daySub').textContent = `${fmtDT(start)} ~ ${live ? '지금' : fmtDT(end)} 기준 · 줄을 누르면 시간별 재고 기록이 펼쳐져요`;
+  document.getElementById('stockHead').textContent = live ? '현재 재고' : '마감 재고';
+
+  const dd0 = dayData[selectedDay] || {};
+  const rows = items
+    .filter(matchFilter)
+    .map((it) => {
+      const v = dd0[it.key] || null;
+      const last = lastRecord(it.key);
+      return { it, v, s: v ? v.s : -1, k: v ? v.k : -1, store: it.store, optionName: it.optionName || '', last: last ? last.t : '' };
+    });
+
+  rows.sort((a, b) => {
+    const av = a[sortKey], bv = b[sortKey];
+    if (typeof av === 'string') return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
+    return sortAsc ? av - bv : bv - av;
+  });
+
+  const withData = rows.filter((r) => r.v).length;
+  document.getElementById('count').textContent = `${rows.length}개 옵션 표시중 (이 날 기록 있는 옵션 ${withData}개, 전체 ${items.length}개)`;
+
+  const tbody = document.getElementById('tbody');
+  let html = '';
+  rows.forEach((r) => {
+    const c = storeColors[r.store];
+    const hi = r.v && r.v.s >= 10 ? 'sold sold-high' : 'sold';
+    const last = lastRecord(r.it.key);
+    html += `<tr class="row" data-key="${esc(r.it.key)}" style="background:${c ? c.bg : '#fff'}">
+      <td style="font-weight:600;border-left:6px solid ${c ? c.accent : 'transparent'};white-space:nowrap">${esc(r.store)}</td>
+      <td>${esc(r.optionName)}</td>
+      <td class="num ${hi}">${soldCell(r.v)}</td>
+      <td class="num">${r.v ? r.v.k.toLocaleString() + '개' : '-'}</td>
+      <td class="num small">${last ? last.t.replace('T', ' ') : '-'}</td>
+    </tr>`;
+    if (openKey === r.it.key) {
+      const all = showAllFor === r.it.key;
+      html += `<tr class="detail"><td colspan="5">
+        <div class="detail-head">
+          <b>${esc(r.optionName)}</b>
+          <button data-toggle-all="${esc(r.it.key)}">${all ? '이 날 기록만 보기' : '전체 기록 보기 (최근 14일)'}</button>
+        </div>
+        ${recordsHtml(r.it.key, selectedDay, all)}
+      </td></tr>`;
+    }
+  });
+  tbody.innerHTML = html;
+
+  tbody.querySelectorAll('tr.row').forEach((tr) => {
+    tr.addEventListener('click', () => {
+      const k = tr.dataset.key;
+      openKey = openKey === k ? null : k;
+      showAllFor = null;
+      renderTable();
+    });
+  });
+  tbody.querySelectorAll('button[data-toggle-all]').forEach((b) => {
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const k = b.dataset.toggleAll;
+      showAllFor = showAllFor === k ? null : k;
+      renderTable();
+    });
+  });
+}
+
+function renderAll() {
+  renderLegend();
+  renderCalendar();
+  renderTable();
+}
+
+// ---------------- 엑셀 다운로드 ----------------
+function downloadExcel() {
+  if (typeof XLSX === 'undefined') { alert('엑셀 기능을 불러오지 못했어요. 새로고침 후 다시 눌러주세요.'); return; }
+  const days = Object.keys(dayData).sort();
+  const wb = XLSX.utils.book_new();
+
+  // 1. 일별 판매 (한 줄 = 하루 x 옵션)
+  const daily = [['날짜', '스토어', '상품명', '옵션', '판매량', '기간불명', '마감재고', '비고']];
+  days.forEach((day) => {
+    items.forEach((it) => {
+      const v = dayData[day][it.key];
+      if (!v) return;
+      daily.push([day, it.store, it.productName || '', it.optionName || '', v.s, v.u || 0, v.k, day === currentDay ? '진행중(마감전)' : '']);
+    });
+  });
+  const ws1 = XLSX.utils.aoa_to_sheet(daily);
+  ws1['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 40 }, { wch: 40 }, { wch: 8 }, { wch: 8 }, { wch: 10 }, { wch: 14 }];
+  XLSX.utils.book_append_sheet(wb, ws1, '일별판매');
+
+  // 2. 날짜표 (행 = 옵션, 열 = 날짜)
+  const head = ['스토어', '상품명', '옵션', ...days, '합계'];
+  const table = [head];
+  items.forEach((it) => {
+    let sum = 0;
+    const cells = days.map((day) => {
+      const v = dayData[day][it.key];
+      if (!v) return '';
+      sum += v.s;
+      return v.s;
+    });
+    table.push([it.store, it.productName || '', it.optionName || '', ...cells, sum]);
+  });
+  const totalRow = ['합계', '', ''];
+  days.forEach((day) => totalRow.push(dayTotal(day, null) || 0));
+  totalRow.push(totalRow.slice(3).reduce((a, b) => a + b, 0));
+  table.push(totalRow);
+  const ws2 = XLSX.utils.aoa_to_sheet(table);
+  ws2['!cols'] = [{ wch: 12 }, { wch: 30 }, { wch: 40 }, ...days.map(() => ({ wch: 11 })), { wch: 8 }];
+  XLSX.utils.book_append_sheet(wb, ws2, '날짜별표');
+
+  // 3. 시간별 재고 원본
+  const hourly = [['시간', '영업일', '스토어', '상품명', '옵션', '재고', '변화']];
+  items.forEach((it) => {
+    const rec = historyData[it.key] || {};
+    let prev = null;
+    Object.keys(rec).sort().forEach((t) => {
+      const v = rec[t];
+      hourly.push([t.replace('T', ' '), bizDayOf(toDate(t)), it.store, it.productName || '', it.optionName || '', v, prev === null ? '' : v - prev]);
+      prev = v;
+    });
+  });
+  const ws3 = XLSX.utils.aoa_to_sheet(hourly);
+  ws3['!cols'] = [{ wch: 17 }, { wch: 12 }, { wch: 12 }, { wch: 30 }, { wch: 40 }, { wch: 8 }, { wch: 8 }];
+  XLSX.utils.book_append_sheet(wb, ws3, '시간별재고');
+
+  const now = new Date();
+  const name = `판매량기록_${ymd(now).replace(/-/g, '')}_${pad(now.getHours())}${pad(now.getMinutes())}.xlsx`;
+  const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+// ---------------- 데이터 불러오기 ----------------
 // 깃허브 저장소 원본을 먼저 읽고(페이지스 재빌드 지연 없음), 실패하면 페이지스 파일로 대체
 async function fetchRepoFile(path) {
   try {
@@ -250,96 +542,72 @@ async function fetchRepoFile(path) {
 async function loadActiveProducts() {
   try {
     const { text } = await fetchRepoFile('products.txt');
-    const nums = text
-      .split('\n')
-      .map((l) => l.trim())
-      .filter(Boolean)
-      .map((l) => {
-        const m = l.match(/products\/(\d+)/);
-        return m ? m[1] : null;
-      })
+    const nums = text.split('\n').map((l) => l.trim()).filter(Boolean)
+      .map((l) => { const m = l.match(/products\/(\d+)/); return m ? m[1] : null; })
       .filter(Boolean);
-    return new Set(nums);
+    return nums.length ? new Set(nums) : null;
   } catch (e) {
     return null;
   }
 }
 
 async function loadData() {
-  const [latestF, historyF] = await Promise.all([
+  const [latestF, historyF, active] = await Promise.all([
     fetchRepoFile('data/latest.json'),
     fetchRepoFile('data/history.json'),
+    loadActiveProducts(),
   ]);
   const latest = JSON.parse(latestF.text);
   historyData = JSON.parse(historyF.text);
   const sourceLabel = historyF.source === 'github' ? '깃허브 원본' : '페이지스 사본(수 분 늦을 수 있음)';
 
-  const bounds = bizBoundaries(new Date());
+  items = Object.entries(latest).map(([key, it]) => Object.assign({ key }, it));
+  if (active) items = items.filter((it) => active.has(String(it.product)));
 
-  rows = Object.entries(latest).map(([key, item]) => {
-    const rec = historyData[key] || {};
-    const yestDetail = computeWindowTotal(rec, bounds.prevStart, bounds.prevEnd);
-    const todayDetail = computeWindowTotal(rec, bounds.currentStart, bounds.currentEnd);
-    return {
-      key,
-      product: item.product,
-      store: item.store,
-      productName: item.productName,
-      optionName: item.optionName,
-      stock: item.stock,
-      yestDetail,
-      todayDetail,
-      yestSold: yestDetail ? yestDetail.measured : null,
-      todaySold: todayDetail ? todayDetail.measured : null,
-    };
-  });
-
-  const active = await loadActiveProducts();
-  if (active) {
-    rows = rows.filter((r) => active.has(String(r.product)));
-  }
-
-  if (rows.length === 0) {
+  if (!items.length) {
     document.getElementById('updated').textContent = '아직 수집된 데이터가 없음. 첫 자동 실행을 기다려주세요.';
     return;
   }
 
   let maxTs = '';
-  Object.values(historyData).forEach((rec) => {
-    const ts = Object.keys(rec).sort().pop();
+  items.forEach((it) => {
+    const ts = Object.keys(historyData[it.key] || {}).sort().pop();
     if (ts && ts > maxTs) maxTs = ts;
   });
   document.getElementById('updated').textContent = maxTs
-    ? '데이터 기준 최근 확인: ' + formatTs(maxTs) + '  ·  출처: ' + sourceLabel
+    ? `데이터 기준 최근 확인: ${maxTs.replace('T', ' ')}  ·  출처: ${sourceLabel}`
     : '데이터 없음';
 
-  rows.sort((a, b) => {
-    const av = a.todaySold === null ? -1 : a.todaySold;
-    const bv = b.todaySold === null ? -1 : b.todaySold;
-    return bv - av;
-  });
+  const now = new Date();
+  buildDayData(now);
+  selectedDay = currentDay;
+  const cd = toDate(currentDay);
+  calMonth = new Date(cd.getFullYear(), cd.getMonth(), 1);
 
-  buildStoreColors();
-  render();
+  const stores = [...new Set(items.map((it) => it.store))].sort();
+  storeColors = {};
+  stores.forEach((st, i) => { storeColors[st] = PALETTE[i % PALETTE.length]; });
+
+  document.getElementById('excelBtn').disabled = false;
+  renderAll();
 }
 
-document.getElementById('search').addEventListener('input', render);
-
+document.getElementById('search').addEventListener('input', renderAll);
+document.getElementById('excelBtn').addEventListener('click', downloadExcel);
+document.getElementById('prevM').addEventListener('click', () => {
+  calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1);
+  renderCalendar();
+});
+document.getElementById('nextM').addEventListener('click', () => {
+  calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1);
+  renderCalendar();
+});
 document.querySelectorAll('th[data-key]').forEach((th) => {
-  let asc = false;
   th.addEventListener('click', () => {
     const key = th.dataset.key;
-    asc = !asc;
-    rows.sort((a, b) => {
-      let av = a[key], bv = b[key];
-      if (key === 'yestSold' || key === 'todaySold') {
-        av = av === null ? -1 : av;
-        bv = bv === null ? -1 : bv;
-      }
-      if (typeof av === 'string') return asc ? av.localeCompare(bv) : bv.localeCompare(av);
-      return asc ? av - bv : bv - av;
-    });
-    render();
+    if (sortKey === key) sortAsc = !sortAsc;
+    else { sortKey = key; sortAsc = key === 'store' || key === 'optionName'; }
+    renderTable();
   });
 });
 
