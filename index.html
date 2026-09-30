@@ -167,8 +167,8 @@ let calMonth = null;   // 달력에 보이는 달 (1일 날짜)
 let activeStore = null;
 let openKey = null;    // 기록 펼친 줄
 let showAllFor = null; // 전체 기록 펼친 줄
-let sortKey = 's';
-let sortAsc = false;
+let sortKey = 'site'; // 처음에는 사이트 옵션 순서
+let sortAsc = true;
 let flagsAll = {};     // 수동변경 의심 { 옵션키: { 시간키: {d, why} } }
 
 // 판매로 인정한 의심 건: 깃허브 data/approved.json 에 저장돼서 어느 컴퓨터에서 봐도 똑같음
@@ -268,70 +268,25 @@ function fmtDT(d) {
 
 // ---------------- 수동 재고변경 감지 설정 (대시보드와 탬퍼몽키 스크립트 값을 똑같이 맞출 것) ----------------
 const DETECT = {
-  MIN_QTY: 30,          // 한 번에 이 수량 이상 줄어든 경우만 검사 (이보다 적으면 무조건 판매로 봄)
-  RATIO: 0.3,           // 직전 재고의 30% 이상이 한 번에 사라지면 의심
-  RATE_MULT: 10,        // 평소 시간당 판매량의 10배 넘게 줄면 의심
-  BASE_DAYS: 7,         // 평소 판매 속도는 최근 7일 기록으로 계산
-  SAME_TIME_OPTIONS: 3, // 같은 상품 옵션이 이 개수 이상 같은 시간에 크게 줄면 의심 (일괄 수정)
+  BIG_DROP: 1000, // 한 번(보통 1시간) 사이에 이 수량 이상 줄면 사람이 재고를 직접 고친 것으로 의심
 };
-
-function isRoundNumber(v) {
-  // 0, 100 단위, 999 / 9999 / 99999 처럼 사람이 손으로 넣은 듯한 숫자
-  return v === 0 || v % 100 === 0 || /^9{3,}$/.test(String(v));
-}
 
 // 전체 기록에서 수동변경 의심 감소를 찾음
 // 결과: { 옵션키: { 시간키: { d: 감소량, why: [이유...] } } }
 function detectSuspicious(history) {
   const out = {};
-  const bigByProductTime = {};
-  const eventsByKey = {};
-
   Object.keys(history).forEach((key) => {
     const rec = history[key] || {};
-    const entries = Object.keys(rec).sort().map((t) => ({ t, dt: toDate(t), v: rec[t] }));
-    const events = [];
-    for (let i = 1; i < entries.length; i++) {
-      const a = entries[i - 1];
-      const b = entries[i];
-      const d = a.v - b.v;
-      if (d < DETECT.MIN_QTY) continue;
-
-      const why = [];
-      if (a.v > 0 && d / a.v >= DETECT.RATIO) why.push(`재고의 ${Math.round((d / a.v) * 100)}%가 한 번에 줄어듦`);
-
-      // 평소 판매 속도: 직전 7일 동안 MIN_QTY 미만으로 줄어든 것들만 합쳐서 시간당 평균
-      const from = new Date(a.dt.getTime() - DETECT.BASE_DAYS * 86400000);
-      const win = entries.slice(0, i).filter((e) => e.dt >= from);
-      let normal = 0;
-      for (let j = 1; j < win.length; j++) {
-        const dd = win[j - 1].v - win[j].v;
-        if (dd > 0 && dd < DETECT.MIN_QTY) normal += dd;
+    const ts = Object.keys(rec).sort();
+    for (let i = 1; i < ts.length; i++) {
+      const d = rec[ts[i - 1]] - rec[ts[i]];
+      if (d >= DETECT.BIG_DROP) {
+        (out[key] = out[key] || {})[ts[i]] = {
+          d,
+          why: [`${rec[ts[i - 1]].toLocaleString()}개에서 ${rec[ts[i]].toLocaleString()}개로 한 번에 ${d.toLocaleString()}개 줄어듦 (${DETECT.BIG_DROP.toLocaleString()}개 이상)`],
+        };
       }
-      const spanH = win.length > 1 ? (win[win.length - 1].dt - win[0].dt) / 3600000 : 0;
-      const perHour = spanH > 0 ? normal / spanH : 0;
-      const gapH = Math.max(1, (b.dt - a.dt) / 3600000);
-      const expected = perHour * gapH;
-      if (d > DETECT.RATE_MULT * Math.max(expected, 1)) {
-        why.push(`평소 판매속도(시간당 ${perHour.toFixed(1)}개)보다 훨씬 많이 줄어듦`);
-      }
-      if (isRoundNumber(b.v)) why.push(`${b.v.toLocaleString()}처럼 딱 떨어지는 숫자로 바뀜`);
-
-      events.push({ t: b.t, d, why });
-      const parts = key.split('_');
-      const pt = `${parts[0]}_${parts[1]}|${b.t}`;
-      bigByProductTime[pt] = (bigByProductTime[pt] || 0) + 1;
     }
-    eventsByKey[key] = events;
-  });
-
-  Object.keys(eventsByKey).forEach((key) => {
-    const parts = key.split('_');
-    eventsByKey[key].forEach((e) => {
-      const n = bigByProductTime[`${parts[0]}_${parts[1]}|${e.t}`] || 0;
-      if (n >= DETECT.SAME_TIME_OPTIONS) e.why.push(`같은 시간에 옵션 ${n}개가 한꺼번에 크게 줄어듦`);
-      if (e.why.length) (out[key] = out[key] || {})[e.t] = { d: e.d, why: e.why };
-    });
   });
   return out;
 }
@@ -444,6 +399,24 @@ const PALETTE = [
   { bg: '#eeeeee', accent: '#6b7280' },
 ];
 let storeColors = {};
+let productColors = {};
+// 스토어마다 색 계열 하나, 같은 스토어 안에서 상품(링크)이 다르면 진하기를 다르게
+const HUES = [217, 30, 145, 271, 330, 180, 0, 90, 50, 250];
+const SHADES = [95, 88, 81, 91, 84];
+function buildColors(list) {
+  const stores = [...new Set(list.map((it) => it.store))].sort();
+  storeColors = {};
+  productColors = {};
+  stores.forEach((st, i) => {
+    const h = HUES[i % HUES.length];
+    storeColors[st] = { bg: `hsl(${h},70%,93%)`, accent: `hsl(${h},65%,48%)` };
+    const prods = [...new Set(list.filter((it) => it.store === st).sort((a, b) => a.site - b.site).map((it) => String(it.product)))];
+    prods.forEach((p, j) => {
+      productColors[p] = { bg: `hsl(${h},${j % 2 ? 60 : 75}%,${SHADES[j % SHADES.length]}%)`, accent: `hsl(${h},65%,${Math.max(30, 50 - j * 6)}%)` };
+    });
+  });
+}
+function productColor(it) { return productColors[String(it.product)] || storeColors[it.store]; }
 
 function renderLegend() {
   const stores = Object.keys(storeColors);
@@ -609,7 +582,7 @@ function renderTable() {
     .map((it) => {
       const v = dd0[it.key] || null;
       const last = lastRecord(it.key);
-      return { it, v, s: v ? soldOf(it.key, v) : -1, k: v ? v.k : -1, store: it.store, optionName: it.optionName || '', last: last ? last.t : '' };
+      return { it, v, site: it.site, s: v ? soldOf(it.key, v) : -1, k: v ? v.k : -1, store: it.store, optionName: it.optionName || '', last: last ? last.t : '' };
     });
 
   rows.sort((a, b) => {
@@ -619,12 +592,15 @@ function renderTable() {
   });
 
   const withData = rows.filter((r) => r.v).length;
-  document.getElementById('count').textContent = `${rows.length}개 옵션 표시중 (이 날 기록 있는 옵션 ${withData}개, 전체 ${items.length}개)`;
+  document.getElementById('count').innerHTML = `${rows.length}개 옵션 표시중 (이 날 기록 있는 옵션 ${withData}개, 전체 ${items.length}개)` +
+    (sortKey !== 'site' ? ' · <a href="#" id="siteSort">사이트 순서로 되돌리기</a>' : ' · 사이트 옵션 순서');
+  const ss = document.getElementById('siteSort');
+  if (ss) ss.addEventListener('click', (e) => { e.preventDefault(); sortKey = 'site'; sortAsc = true; renderTable(); });
 
   const tbody = document.getElementById('tbody');
   let html = '';
   rows.forEach((r) => {
-    const c = storeColors[r.store];
+    const c = productColor(r.it);
     const hi = r.v && r.s >= 10 ? 'sold sold-high' : 'sold';
     const last = lastRecord(r.it.key);
     html += `<tr class="row" data-key="${esc(r.it.key)}" style="background:${c ? c.bg : '#fff'}">
@@ -959,15 +935,39 @@ function downloadExcel() {
 }
 
 // ---------------- 데이터 불러오기 ----------------
-// 깃허브 저장소 원본을 먼저 읽고(페이지스 재빌드 지연 없음), 실패하면 페이지스 파일로 대체
+// 데이터 읽는 순서
+// 1. 깃허브 API (가장 최신, 단 같은 인터넷(IP)에서 시간당 60번 제한)
+// 2. raw.githubusercontent (제한 없음, 최대 5분 늦을 수 있음)
+// 3. 깃허브 페이지스 사본 (자주 멈춰서 몇 시간씩 옛날 데이터일 수 있어 마지막 수단)
+const RAW_BASE = 'https://raw.githubusercontent.com/yongki9156/competitor-stock/main/';
+function apiBlocked() {
+  try { return Date.now() < Number(localStorage.getItem('ghApiBlockedUntil') || 0); } catch (e) { return false; }
+}
+function blockApi() {
+  try { localStorage.setItem('ghApiBlockedUntil', String(Date.now() + 15 * 60 * 1000)); } catch (e) { /* 무시 */ }
+}
+
 async function fetchRepoFile(path) {
+  if (!apiBlocked()) {
+    try {
+      const res = await fetch(REPO_API + path, {
+        headers: { Accept: 'application/vnd.github.raw+json' },
+        cache: 'no-store',
+      });
+      if (res.ok) return { text: await res.text(), source: 'github' };
+      if (res.status === 403 || res.status === 429) blockApi(); // 시간당 횟수 제한 걸림
+      else if (res.status === 404) throw Object.assign(new Error(path + ' 없음'), { notFound: true });
+    } catch (e) {
+      if (e.notFound) throw e;
+    }
+  }
   try {
-    const res = await fetch(REPO_API + path, {
-      headers: { Accept: 'application/vnd.github.raw+json' },
-      cache: 'no-store',
-    });
-    if (res.ok) return { text: await res.text(), source: 'github' };
-  } catch (e) { /* 아래 대체 경로 사용 */ }
+    const res = await fetch(RAW_BASE + path + '?t=' + Date.now(), { cache: 'no-store' });
+    if (res.ok) return { text: await res.text(), source: 'raw' };
+    if (res.status === 404) throw Object.assign(new Error(path + ' 없음'), { notFound: true });
+  } catch (e) {
+    if (e.notFound) throw e;
+  }
   const res = await fetch(path + '?_=' + Date.now());
   if (!res.ok) throw new Error(path + ' 불러오기 실패');
   return { text: await res.text(), source: 'pages' };
@@ -979,7 +979,7 @@ async function loadActiveProducts() {
     const nums = text.split('\n').map((l) => l.trim()).filter(Boolean)
       .map((l) => { const m = l.match(/products\/(\d+)/); return m ? m[1] : null; })
       .filter(Boolean);
-    return nums.length ? new Set(nums) : null;
+    return nums.length ? nums : null;
   } catch (e) {
     return null;
   }
@@ -1005,12 +1005,20 @@ async function loadData(isRefresh) {
   const latest = JSON.parse(latestF.text);
   historyData = JSON.parse(historyF.text);
   flagsAll = detectSuspicious(historyData);
-  const sourceLabel = historyF.source === 'github' ? '깃허브 원본' : '페이지스 사본(수 분 늦을 수 있음)';
+  const srcs = [latestF.source, historyF.source];
+  const sourceLabel = srcs.includes('pages') ? '페이지스 사본(옛날 데이터일 수 있음)' : srcs.includes('raw') ? '깃허브 원본(최대 5분 지연)' : '깃허브 원본';
 
   items = Object.entries(latest).map(([key, it]) => Object.assign({ key }, it));
   allItems = items.slice();
   Object.keys(sheetKeyCache).forEach((k) => delete sheetKeyCache[k]);
-  if (active) items = items.filter((it) => active.has(String(it.product)));
+  // 사이트 옵션 순서: products.txt 상품 순서 → 상품 안에서는 옵션이 처음 기록된 순서(사이트 순서)
+  const optIdx = {};
+  items.forEach((it, i) => { optIdx[it.key] = i; });
+  const prodRank = {};
+  (active || []).forEach((p, i) => { if (!(p in prodRank)) prodRank[p] = i; });
+  items.forEach((it) => { it.site = (prodRank[String(it.product)] ?? 999) * 100000 + optIdx[it.key]; });
+  if (active) items = items.filter((it) => String(it.product) in prodRank);
+  items.sort((a, b) => a.site - b.site);
 
   if (!items.length) {
     document.getElementById('updated').textContent = '아직 수집된 데이터가 없음. 첫 자동 실행을 기다려주세요.';
@@ -1022,8 +1030,9 @@ async function loadData(isRefresh) {
     const ts = Object.keys(historyData[it.key] || {}).sort().pop();
     if (ts && ts > maxTs) maxTs = ts;
   });
+  const lagH = maxTs ? (Date.now() - toDate(maxTs).getTime()) / 3600000 : 0;
   document.getElementById('updated').textContent = maxTs
-    ? `데이터 기준 최근 확인: ${maxTs.replace('T', ' ')}  ·  출처: ${sourceLabel}`
+    ? `데이터 기준 최근 확인: ${maxTs.replace('T', ' ')}  ·  출처: ${sourceLabel}${lagH > 3 ? '  ·  3시간 넘게 새 기록 없음, 관리용 컴퓨터 자동조회 확인 필요' : ''}`
     : '데이터 없음';
 
   const now = new Date();
@@ -1037,8 +1046,7 @@ async function loadData(isRefresh) {
   }
 
   const stores = [...new Set(items.map((it) => it.store))].sort();
-  storeColors = {};
-  stores.forEach((st, i) => { storeColors[st] = PALETTE[i % PALETTE.length]; });
+  buildColors(items);
 
   document.getElementById('excelBtn').disabled = false;
   document.getElementById('sheetBtn').disabled = false;
