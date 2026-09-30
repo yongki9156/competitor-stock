@@ -10,6 +10,9 @@
   h1 { font-size:20px; margin:0 0 4px; }
   .top { display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:12px; margin-bottom:16px; }
   .updated { color:#888; font-size:13px; }
+  .mode { display:inline-block; margin-top:6px; font-size:12px; padding:2px 10px; border-radius:999px; }
+  .mode.edit { background:#e6f6ec; color:#1c8e4d; }
+  .mode.view { background:#eee; color:#666; }
   .btn { padding:9px 16px; border:1px solid #1f7a44; background:#22a55b; color:#fff; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; }
   .btn:hover { background:#1c8e4d; }
   .btn:disabled { opacity:.5; cursor:default; }
@@ -51,6 +54,16 @@
   .sold { font-weight:700; }
   .sold-high { color:#e0442f; }
   .unk { font-weight:400; font-size:11px; color:#999; cursor:help; }
+  .sus { font-weight:700; font-size:11px; color:#d97706; }
+  .ok { font-weight:400; font-size:11px; color:#22a55b; }
+  .cal-day .warn { position:absolute; top:3px; right:5px; font-size:11px; font-weight:800; color:#d97706; }
+  .sus-box { border:1px solid #f5c26b; background:#fff8ec; border-radius:6px; padding:8px 10px; margin-bottom:10px; font-size:13px; }
+  .sus-box .ev { display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:4px 0; border-bottom:1px dashed #f1d9a8; }
+  .sus-box .ev:last-child { border-bottom:none; }
+  .sus-box .why { color:#8a5a00; font-size:12px; }
+  .sus-box button { border:1px solid #d97706; background:#fff; color:#b45309; border-radius:6px; padding:2px 10px; font-size:12px; cursor:pointer; }
+  .sus-box button.on { background:#22a55b; border-color:#22a55b; color:#fff; }
+  .recs .s { color:#d97706; font-weight:700; }
   .small { font-size:12px; color:#666; white-space:nowrap; }
 
   tr.detail td { background:#fcfcfd; padding:12px 16px 16px; }
@@ -69,6 +82,7 @@
     <div>
       <h1>경쟁사 판매량 추적 대시보드</h1>
       <div class="updated" id="updated">데이터 불러오는 중...</div>
+      <div id="mode" class="mode view"></div>
     </div>
     <button class="btn" id="excelBtn" disabled>엑셀 다운로드</button>
   </div>
@@ -87,7 +101,8 @@
       <div class="cal-note">
         날짜 칸 숫자는 그날 판매량 합계예요 (위에서 고른 스토어 기준).<br>
         하루는 전날 18시부터 그날 18시까지예요. 18시가 지나면 다음 날짜로 넘어가요.<br>
-        빨간 '진행중'은 아직 마감 전이라 계속 늘어나는 날이에요.
+        빨간 '진행중'은 아직 마감 전이라 계속 늘어나는 날이에요.<br>
+        주황 '!'는 사람이 재고를 직접 고친 것으로 의심되는 감소가 있는 날이에요. 합계에서 빠져 있고, 표에서 줄을 눌러 판매로 인정하면 다시 들어가요.
       </div>
     </div>
 
@@ -125,6 +140,70 @@ let openKey = null;    // 기록 펼친 줄
 let showAllFor = null; // 전체 기록 펼친 줄
 let sortKey = 's';
 let sortAsc = false;
+let flagsAll = {};     // 수동변경 의심 { 옵션키: { 시간키: {d, why} } }
+
+// 판매로 인정한 의심 건: 깃허브 data/approved.json 에 저장돼서 어느 컴퓨터에서 봐도 똑같음
+// 저장은 탬퍼몽키 스크립트가 깔린 컴퓨터(관리용)에서만 가능, 나머지는 보기 전용
+let approved = new Set();
+let canEdit = false;
+let saving = false;
+let sourceText = '';
+
+function sendToTracker(msg) {
+  window.postMessage(Object.assign({ from: 'cs-dashboard' }, msg), '*');
+}
+
+function setModeLabel() {
+  const el = document.getElementById('mode');
+  if (!el) return;
+  el.textContent = canEdit
+    ? (saving ? '관리용 컴퓨터 · 저장중...' : '관리용 컴퓨터 · 판매 인정 가능')
+    : '보기 전용 컴퓨터 · 판매 인정은 관리용 컴퓨터에서';
+  el.className = 'mode ' + (canEdit ? 'edit' : 'view');
+}
+
+window.addEventListener('message', (ev) => {
+  const m = ev.data;
+  if (!m || m.from !== 'cs-tracker') return;
+  if (m.type === 'pong' && !canEdit) {
+    canEdit = true;
+    setModeLabel();
+    // 예전 버전에서 이 브라우저에만 저장해 둔 인정 내역이 있으면 깃허브로 옮김
+    try {
+      const old = JSON.parse(localStorage.getItem('approvedSuspicious') || '[]').filter((id) => !approved.has(id));
+      if (old.length) {
+        old.forEach((id) => approved.add(id));
+        saving = true;
+        setModeLabel();
+        sendToTracker({ type: 'approve', ids: old, on: true });
+      }
+      localStorage.removeItem('approvedSuspicious');
+    } catch (e) { /* 무시 */ }
+    if (items.length) renderAll();
+  }
+  if (m.type === 'approved') {
+    saving = false;
+    if (m.ok) approved = new Set(Object.keys(m.approved || {}));
+    else alert('판매 인정 저장 실패: ' + m.error + '\n잠시 후 다시 눌러주세요.');
+    setModeLabel();
+    renderAll();
+  }
+});
+const evId = (key, t) => `${key}|${t}`;
+
+// 화면에 보여줄 판매량 = 판매로 본 수량 + 인정한 의심 수량
+function soldOf(key, v) {
+  if (!v) return 0;
+  let n = v.s;
+  (v.ev || []).forEach(([t, d]) => { if (approved.has(evId(key, t))) n += d; });
+  return n;
+}
+function pendingOf(key, v) {
+  if (!v) return 0;
+  let n = 0;
+  (v.ev || []).forEach(([t, d]) => { if (!approved.has(evId(key, t))) n += d; });
+  return n;
+}
 
 // ---------------- 날짜 계산 ----------------
 const pad = (n) => String(n).padStart(2, '0');
@@ -158,11 +237,83 @@ function fmtDT(d) {
   return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-// 구간 판매량 계산 (탬퍼몽키 스크립트와 같은 방식)
-// s: 기록이 이어져 측정된 판매량 / u: 기록이 비어 언제 팔렸는지 모르는 감소량 / k: 구간 마지막 재고
-function computeWindow(rec, start, end) {
+// ---------------- 수동 재고변경 감지 설정 (대시보드와 탬퍼몽키 스크립트 값을 똑같이 맞출 것) ----------------
+const DETECT = {
+  MIN_QTY: 30,          // 한 번에 이 수량 이상 줄어든 경우만 검사 (이보다 적으면 무조건 판매로 봄)
+  RATIO: 0.3,           // 직전 재고의 30% 이상이 한 번에 사라지면 의심
+  RATE_MULT: 10,        // 평소 시간당 판매량의 10배 넘게 줄면 의심
+  BASE_DAYS: 7,         // 평소 판매 속도는 최근 7일 기록으로 계산
+  SAME_TIME_OPTIONS: 3, // 같은 상품 옵션이 이 개수 이상 같은 시간에 크게 줄면 의심 (일괄 수정)
+};
+
+function isRoundNumber(v) {
+  // 0, 100 단위, 999 / 9999 / 99999 처럼 사람이 손으로 넣은 듯한 숫자
+  return v === 0 || v % 100 === 0 || /^9{3,}$/.test(String(v));
+}
+
+// 전체 기록에서 수동변경 의심 감소를 찾음
+// 결과: { 옵션키: { 시간키: { d: 감소량, why: [이유...] } } }
+function detectSuspicious(history) {
+  const out = {};
+  const bigByProductTime = {};
+  const eventsByKey = {};
+
+  Object.keys(history).forEach((key) => {
+    const rec = history[key] || {};
+    const entries = Object.keys(rec).sort().map((t) => ({ t, dt: toDate(t), v: rec[t] }));
+    const events = [];
+    for (let i = 1; i < entries.length; i++) {
+      const a = entries[i - 1];
+      const b = entries[i];
+      const d = a.v - b.v;
+      if (d < DETECT.MIN_QTY) continue;
+
+      const why = [];
+      if (a.v > 0 && d / a.v >= DETECT.RATIO) why.push(`재고의 ${Math.round((d / a.v) * 100)}%가 한 번에 줄어듦`);
+
+      // 평소 판매 속도: 직전 7일 동안 MIN_QTY 미만으로 줄어든 것들만 합쳐서 시간당 평균
+      const from = new Date(a.dt.getTime() - DETECT.BASE_DAYS * 86400000);
+      const win = entries.slice(0, i).filter((e) => e.dt >= from);
+      let normal = 0;
+      for (let j = 1; j < win.length; j++) {
+        const dd = win[j - 1].v - win[j].v;
+        if (dd > 0 && dd < DETECT.MIN_QTY) normal += dd;
+      }
+      const spanH = win.length > 1 ? (win[win.length - 1].dt - win[0].dt) / 3600000 : 0;
+      const perHour = spanH > 0 ? normal / spanH : 0;
+      const gapH = Math.max(1, (b.dt - a.dt) / 3600000);
+      const expected = perHour * gapH;
+      if (d > DETECT.RATE_MULT * Math.max(expected, 1)) {
+        why.push(`평소 판매속도(시간당 ${perHour.toFixed(1)}개)보다 훨씬 많이 줄어듦`);
+      }
+      if (isRoundNumber(b.v)) why.push(`${b.v.toLocaleString()}처럼 딱 떨어지는 숫자로 바뀜`);
+
+      events.push({ t: b.t, d, why });
+      const parts = key.split('_');
+      const pt = `${parts[0]}_${parts[1]}|${b.t}`;
+      bigByProductTime[pt] = (bigByProductTime[pt] || 0) + 1;
+    }
+    eventsByKey[key] = events;
+  });
+
+  Object.keys(eventsByKey).forEach((key) => {
+    const parts = key.split('_');
+    eventsByKey[key].forEach((e) => {
+      const n = bigByProductTime[`${parts[0]}_${parts[1]}|${e.t}`] || 0;
+      if (n >= DETECT.SAME_TIME_OPTIONS) e.why.push(`같은 시간에 옵션 ${n}개가 한꺼번에 크게 줄어듦`);
+      if (e.why.length) (out[key] = out[key] || {})[e.t] = { d: e.d, why: e.why };
+    });
+  });
+  return out;
+}
+
+// 구간 판매량 계산
+// s: 판매로 본 수량 / u: 기록이 비어 언제 팔렸는지 모르는 감소량 / k: 구간 마지막 재고
+// x: 수동변경 의심 수량 / ev: 의심 목록 [[시간키, 수량, 이유]]
+function computeWindow(rec, start, end, flags) {
+  flags = flags || {};
   const entries = Object.keys(rec)
-    .map((k) => ({ dt: toDate(k), v: rec[k] }))
+    .map((k) => ({ t: k, dt: toDate(k), v: rec[k] }))
     .sort((a, b) => a.dt - b.dt);
   const before = entries.filter((e) => e.dt <= start).pop();
   const within = entries.filter((e) => e.dt > start && e.dt <= end);
@@ -172,17 +323,24 @@ function computeWindow(rec, start, end) {
   const chain = baselineInside ? [before, ...within] : within;
 
   let s = 0;
+  let x = 0;
+  const ev = [];
+  const take = (e, diff) => {
+    const f = flags[e.t];
+    if (f) { x += diff; ev.push([e.t, diff, f.why.join(', ')]); return true; }
+    return false;
+  };
   for (let i = 1; i < chain.length; i++) {
     const diff = chain[i - 1].v - chain[i].v;
-    if (diff > 0) s += diff;
+    if (diff > 0 && !take(chain[i], diff)) s += diff;
   }
   let u = 0;
   let from = null;
   if (before && !baselineInside) {
     const diff = before.v - within[0].v;
-    if (diff > 0) { u = diff; from = before.dt; }
+    if (diff > 0 && !take(within[0], diff)) { u = diff; from = before.dt; }
   }
-  return { s, u, k: within[within.length - 1].v, base: !!before, from, to: within[0].dt };
+  return { s, u, k: within[within.length - 1].v, x, ev, base: !!before, from, to: within[0].dt };
 }
 
 // 모든 옵션의 날짜별 판매량 만들기
@@ -206,10 +364,10 @@ function buildDayData(now) {
     }
     days.forEach((day) => {
       const { start, end } = dayWindow(day);
-      const r = computeWindow(rec, start, day === currentDay ? now : end);
+      const r = computeWindow(rec, start, day === currentDay ? now : end, flagsAll[it.key]);
       let v = null;
       if (r && (r.base || !archive[day])) v = r;
-      else if (archive[day]) v = { s: archive[day].s, u: archive[day].u, k: archive[day].k, archived: true };
+      else if (archive[day]) v = { s: archive[day].s, u: archive[day].u, k: archive[day].k, x: archive[day].x || 0, ev: archive[day].ev || [], archived: true };
       if (!v) return;
       (dayData[day] = dayData[day] || {})[it.key] = v;
     });
@@ -223,6 +381,14 @@ function matchFilter(it) {
   return !q || it.store.toLowerCase().includes(q) || (it.optionName || '').toLowerCase().includes(q);
 }
 
+function dayPending(day) {
+  const dd = dayData[day];
+  if (!dd) return 0;
+  let n = 0;
+  items.forEach((it) => { if (matchFilter(it) && dd[it.key]) n += pendingOf(it.key, dd[it.key]); });
+  return n;
+}
+
 function dayTotal(day, storeOnly) {
   const dd = dayData[day];
   if (!dd) return null;
@@ -232,7 +398,7 @@ function dayTotal(day, storeOnly) {
     if (storeOnly !== undefined && storeOnly !== null && it.store !== storeOnly) return;
     if (storeOnly === undefined && !matchFilter(it)) return;
     const v = dd[it.key];
-    if (v) { sum += v.s; any = true; }
+    if (v) { sum += soldOf(it.key, v); any = true; }
   });
   return any ? sum : null;
 }
@@ -300,7 +466,7 @@ function renderCalendar() {
     const alpha = t && max ? 0.08 + 0.35 * (t / max) : 0;
     const style = alpha ? `style="background:rgba(59,130,246,${alpha.toFixed(2)})"` : '';
     html += `<div class="${cls.join(' ')}" data-day="${day}" ${style}>
-      <span class="n">${d}</span>${day === currentDay ? '<span class="live">진행중</span>' : ''}
+      <span class="n">${d}</span>${has && dayPending(day) > 0 ? '<span class="warn" title="수동변경 의심 있음">!</span>' : ''}${day === currentDay ? '<span class="live">진행중</span>' : ''}
       ${has ? `<span class="v">${(t || 0).toLocaleString()}</span>` : ''}
     </div>`;
   }
@@ -318,15 +484,19 @@ function renderCalendar() {
 }
 
 // ---------------- 선택한 날 표 ----------------
-function soldCell(v) {
+function soldCell(v, key) {
   if (!v) return '-';
-  let html = `${v.s.toLocaleString()}개`;
+  let html = `${soldOf(key, v).toLocaleString()}개`;
   if (v.u > 0) {
     const tip = v.from
       ? `${fmtDT(v.from)} 기록과 ${fmtDT(v.to)} 기록 사이에 줄어든 양. 그 사이 기록이 없어 언제 팔렸는지 알 수 없음`
       : '기록이 비어 있던 동안 줄어든 양';
     html += `<br><span class="unk" title="${tip}">+${v.u.toLocaleString()} 기간불명</span>`;
   }
+  const pend = pendingOf(key, v);
+  if (pend > 0) html += `<br><span class="sus" title="줄을 누르면 이유를 보고 판매로 인정할 수 있어요">+${pend.toLocaleString()} 수동변경 의심</span>`;
+  const acc = soldOf(key, v) - v.s;
+  if (acc > 0) html += `<br><span class="ok">의심 ${acc.toLocaleString()} 인정 포함</span>`;
   return html;
 }
 
@@ -337,6 +507,7 @@ function lastRecord(key) {
 }
 
 function recordsHtml(key, day, all) {
+  const fl = flagsAll[key] || {};
   const rec = historyData[key] || {};
   const entries = Object.keys(rec).sort().map((t) => ({ t, dt: toDate(t), v: rec[t] }));
   if (!entries.length) return '<div class="small">시간별 기록 없음 (14일 지난 기록은 일별 합계만 남아 있음)</div>';
@@ -359,25 +530,40 @@ function recordsHtml(key, day, all) {
     list.forEach((e) => {
       const bd = bizDayOf(e.dt);
       if (bd !== lastDay) { html += `<div class="dayhdr">${bd} 영업일</div>`; lastDay = bd; }
-      html += recLine(e, prev);
+      html += recLine(e, prev, fl);
       prev = e;
     });
   } else {
-    list.forEach((e) => { html += recLine(e, prev); prev = e; });
+    list.forEach((e) => { html += recLine(e, prev, fl); prev = e; });
   }
   return html + '</div>';
 }
 
-function recLine(e, prev) {
+function recLine(e, prev, fl) {
   let diff = '';
   if (e.base) diff = '<span class="base">전날 기준</span>';
   else if (prev) {
     const d = prev.v - e.v;
-    if (d > 0) diff = `<span class="d">-${d.toLocaleString()}</span>`;
+    if (d > 0 && fl && fl[e.t]) diff = `<span class="s" title="${esc(fl[e.t].why.join(', '))}">-${d.toLocaleString()} 의심</span>`;
+    else if (d > 0) diff = `<span class="d">-${d.toLocaleString()}</span>`;
     else if (d < 0) diff = `<span class="p">+${(-d).toLocaleString()} 입고</span>`;
     else diff = '<span class="base">변화없음</span>';
   }
   return `<div class="r"><span>${fmtDT(e.dt)}</span><span>${e.v.toLocaleString()}개</span><span>${diff}</span></div>`;
+}
+
+function susHtml(key, v) {
+  if (!v || !v.ev || !v.ev.length) return '';
+  let html = '<div class="sus-box"><b>수동변경 의심</b> · 판매가 아니라 판매자가 재고 숫자를 직접 고친 것으로 보이는 감소예요';
+  v.ev.forEach(([t, d, why]) => {
+    const id = evId(key, t);
+    const on = approved.has(id);
+    html += `<div class="ev"><span>${fmtDT(toDate(t))}</span><b>-${d.toLocaleString()}개</b><span class="why">${esc(why)}</span>
+      ${canEdit
+        ? `<button data-approve="${esc(id)}" class="${on ? 'on' : ''}">${on ? '판매로 인정됨 (취소)' : '판매로 인정'}</button>`
+        : `<span class="${on ? 'ok' : 'why'}">${on ? '판매로 인정됨' : '미인정'}</span>`}</div>`;
+  });
+  return html + '</div>';
 }
 
 function renderTable() {
@@ -394,7 +580,7 @@ function renderTable() {
     .map((it) => {
       const v = dd0[it.key] || null;
       const last = lastRecord(it.key);
-      return { it, v, s: v ? v.s : -1, k: v ? v.k : -1, store: it.store, optionName: it.optionName || '', last: last ? last.t : '' };
+      return { it, v, s: v ? soldOf(it.key, v) : -1, k: v ? v.k : -1, store: it.store, optionName: it.optionName || '', last: last ? last.t : '' };
     });
 
   rows.sort((a, b) => {
@@ -410,12 +596,12 @@ function renderTable() {
   let html = '';
   rows.forEach((r) => {
     const c = storeColors[r.store];
-    const hi = r.v && r.v.s >= 10 ? 'sold sold-high' : 'sold';
+    const hi = r.v && r.s >= 10 ? 'sold sold-high' : 'sold';
     const last = lastRecord(r.it.key);
     html += `<tr class="row" data-key="${esc(r.it.key)}" style="background:${c ? c.bg : '#fff'}">
       <td style="font-weight:600;border-left:6px solid ${c ? c.accent : 'transparent'};white-space:nowrap">${esc(r.store)}</td>
       <td>${esc(r.optionName)}</td>
-      <td class="num ${hi}">${soldCell(r.v)}</td>
+      <td class="num ${hi}">${soldCell(r.v, r.it.key)}</td>
       <td class="num">${r.v ? r.v.k.toLocaleString() + '개' : '-'}</td>
       <td class="num small">${last ? last.t.replace('T', ' ') : '-'}</td>
     </tr>`;
@@ -426,6 +612,7 @@ function renderTable() {
           <b>${esc(r.optionName)}</b>
           <button data-toggle-all="${esc(r.it.key)}">${all ? '이 날 기록만 보기' : '전체 기록 보기 (최근 14일)'}</button>
         </div>
+        ${susHtml(r.it.key, r.v)}
         ${recordsHtml(r.it.key, selectedDay, all)}
       </td></tr>`;
     }
@@ -438,6 +625,23 @@ function renderTable() {
       openKey = openKey === k ? null : k;
       showAllFor = null;
       renderTable();
+    });
+  });
+  tbody.querySelectorAll('button[data-approve]').forEach((b) => {
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = b.dataset.approve;
+      if (!canEdit) {
+        alert('이 컴퓨터는 보기 전용이에요. 판매 인정은 탬퍼몽키가 설치된 관리용 컴퓨터에서 눌러주세요.');
+        return;
+      }
+      if (saving) return;
+      const on = !approved.has(id);
+      if (on) approved.add(id); else approved.delete(id);
+      saving = true;
+      setModeLabel();
+      renderAll();
+      sendToTracker({ type: 'approve', ids: [id], on });
     });
   });
   tbody.querySelectorAll('button[data-toggle-all]').forEach((b) => {
@@ -463,16 +667,16 @@ function downloadExcel() {
   const wb = XLSX.utils.book_new();
 
   // 1. 일별 판매 (한 줄 = 하루 x 옵션)
-  const daily = [['날짜', '스토어', '상품명', '옵션', '판매량', '기간불명', '마감재고', '비고']];
+  const daily = [['날짜', '스토어', '상품명', '옵션', '판매량', '기간불명', '수동변경의심(미인정)', '마감재고', '비고']];
   days.forEach((day) => {
     items.forEach((it) => {
       const v = dayData[day][it.key];
       if (!v) return;
-      daily.push([day, it.store, it.productName || '', it.optionName || '', v.s, v.u || 0, v.k, day === currentDay ? '진행중(마감전)' : '']);
+      daily.push([day, it.store, it.productName || '', it.optionName || '', soldOf(it.key, v), v.u || 0, pendingOf(it.key, v), v.k, day === currentDay ? '진행중(마감전)' : '']);
     });
   });
   const ws1 = XLSX.utils.aoa_to_sheet(daily);
-  ws1['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 40 }, { wch: 40 }, { wch: 8 }, { wch: 8 }, { wch: 10 }, { wch: 14 }];
+  ws1['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 40 }, { wch: 40 }, { wch: 8 }, { wch: 8 }, { wch: 12 }, { wch: 10 }, { wch: 14 }];
   XLSX.utils.book_append_sheet(wb, ws1, '일별판매');
 
   // 2. 날짜표 (행 = 옵션, 열 = 날짜)
@@ -483,8 +687,9 @@ function downloadExcel() {
     const cells = days.map((day) => {
       const v = dayData[day][it.key];
       if (!v) return '';
-      sum += v.s;
-      return v.s;
+      const n = soldOf(it.key, v);
+      sum += n;
+      return n;
     });
     table.push([it.store, it.productName || '', it.optionName || '', ...cells, sum]);
   });
@@ -510,6 +715,20 @@ function downloadExcel() {
   const ws3 = XLSX.utils.aoa_to_sheet(hourly);
   ws3['!cols'] = [{ wch: 17 }, { wch: 12 }, { wch: 12 }, { wch: 30 }, { wch: 40 }, { wch: 8 }, { wch: 8 }];
   XLSX.utils.book_append_sheet(wb, ws3, '시간별재고');
+
+  // 4. 수동변경 의심 목록
+  const sus = [['영업일', '시간', '스토어', '상품명', '옵션', '감소수량', '의심 이유', '판매로 인정']];
+  days.forEach((day) => {
+    items.forEach((it) => {
+      const v = dayData[day][it.key];
+      (v && v.ev ? v.ev : []).forEach(([t, d, why]) => {
+        sus.push([day, t.replace('T', ' '), it.store, it.productName || '', it.optionName || '', d, why, approved.has(evId(it.key, t)) ? '인정' : '미인정']);
+      });
+    });
+  });
+  const ws4 = XLSX.utils.aoa_to_sheet(sus);
+  ws4['!cols'] = [{ wch: 12 }, { wch: 17 }, { wch: 12 }, { wch: 30 }, { wch: 40 }, { wch: 9 }, { wch: 60 }, { wch: 10 }];
+  XLSX.utils.book_append_sheet(wb, ws4, '수동변경의심');
 
   const now = new Date();
   const name = `판매량기록_${ymd(now).replace(/-/g, '')}_${pad(now.getHours())}${pad(now.getMinutes())}.xlsx`;
@@ -551,14 +770,26 @@ async function loadActiveProducts() {
   }
 }
 
-async function loadData() {
-  const [latestF, historyF, active] = await Promise.all([
+async function loadApproved() {
+  try {
+    const { text } = await fetchRepoFile('data/approved.json');
+    return new Set(Object.keys(JSON.parse(text) || {}));
+  } catch (e) {
+    return new Set(); // 아직 인정한 게 없으면 파일이 없음
+  }
+}
+
+async function loadData(isRefresh) {
+  const [latestF, historyF, active, appr] = await Promise.all([
     fetchRepoFile('data/latest.json'),
     fetchRepoFile('data/history.json'),
     loadActiveProducts(),
+    loadApproved(),
   ]);
+  if (!saving) approved = appr;
   const latest = JSON.parse(latestF.text);
   historyData = JSON.parse(historyF.text);
+  flagsAll = detectSuspicious(historyData);
   const sourceLabel = historyF.source === 'github' ? '깃허브 원본' : '페이지스 사본(수 분 늦을 수 있음)';
 
   items = Object.entries(latest).map(([key, it]) => Object.assign({ key }, it));
@@ -579,10 +810,14 @@ async function loadData() {
     : '데이터 없음';
 
   const now = new Date();
+  const prevCurrent = currentDay;
   buildDayData(now);
-  selectedDay = currentDay;
-  const cd = toDate(currentDay);
-  calMonth = new Date(cd.getFullYear(), cd.getMonth(), 1);
+  // 새로고침 때는 보고 있던 날짜 유지 (진행중인 날을 보고 있었으면 새 진행중 날짜로)
+  if (!isRefresh || !selectedDay || selectedDay === prevCurrent || !dayData[selectedDay]) selectedDay = currentDay;
+  if (!isRefresh || !calMonth) {
+    const cd = toDate(selectedDay);
+    calMonth = new Date(cd.getFullYear(), cd.getMonth(), 1);
+  }
 
   const stores = [...new Set(items.map((it) => it.store))].sort();
   storeColors = {};
@@ -611,9 +846,15 @@ document.querySelectorAll('th[data-key]').forEach((th) => {
   });
 });
 
+setModeLabel();
 loadData().catch((err) => {
   document.getElementById('updated').textContent = '데이터 로드 실패: ' + err.message;
 });
+// 탬퍼몽키가 깔린 관리용 컴퓨터인지 확인
+setTimeout(() => sendToTracker({ type: 'ping' }), 300);
+setTimeout(() => { if (!canEdit) sendToTracker({ type: 'ping' }); }, 2000);
+// 10분마다 최신 데이터로 자동 새로고침 (두 컴퓨터 화면이 계속 같게)
+setInterval(() => { loadData(true).catch(() => {}); }, 10 * 60 * 1000);
 </script>
 </body>
 </html>
