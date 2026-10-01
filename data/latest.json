@@ -6569,7 +6569,7 @@
     "optionName": "기본",
     "date": "2026-10-01",
     "stock": 99999,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWDvpt6HxcR6fBUXjDYS_12476161367_59085377559": {
