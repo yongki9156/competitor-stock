@@ -264,16 +264,6 @@ async function saveApprovals(ids, on) {
   }, `판매 인정 ${on ? '추가' : '취소'} ${ids.length}건`);
 }
 
-// 업체 분류 저장 (바뀐 업체만 합쳐서 저장하므로 두 컴퓨터가 동시에 옮겨도 서로 안 지워짐)
-async function saveCategoryChange(changes) {
-  if (editMode() === 'bridge') {
-    const m = await askTracker({ type: 'saveCategories', changes }, 'categoriesSaved');
-    if (!m.ok) throw new Error(m.error);
-    return m.categories || {};
-  }
-  return ghUpdateJson('data/categories.json', (obj) => Object.assign(obj, changes), '업체 분류 변경');
-}
-
 async function enableEditing() {
   const t = prompt('이 컴퓨터에서도 편집하려면 깃허브 토큰을 붙여넣어 주세요.\n(탬퍼몽키 스크립트 17번째 줄에 있는 github_pat_ 로 시작하는 값)\n토큰은 이 컴퓨터 크롬에만 저장돼요.');
   if (!t) return;
@@ -477,7 +467,7 @@ function buildDayData(now) {
 // ---------------- 필터 ----------------
 function matchFilter(it) {
   if (activeStore !== null && it.store !== activeStore) return false;
-  if (activeCat !== null && catOf(it.store) !== activeCat) return false;
+  if (activeCat !== null && catOf(it) !== activeCat) return false;
   const q = document.getElementById('search').value.trim().toLowerCase();
   return !q || it.store.toLowerCase().includes(q) || (it.optionName || '').toLowerCase().includes(q);
 }
@@ -536,37 +526,38 @@ function buildColors(list) {
 function productColor(it) { return productColors[String(it.product)] || storeColors[it.store]; }
 
 // ---------------- 업체 분류 (데코타일 / 장판) ----------------
-// 분류는 깃허브 data/categories.json 에 저장돼서 두 컴퓨터가 똑같이 보임 (옮기기는 관리용 컴퓨터만)
-const CATS = ['데코타일', '장판'];
-let categories = {}; // { 스토어명: '데코타일' | '장판' }
+// 분류는 products.txt 의 [데코타일] [장판] 제목 줄로 정함 (링크 단위)
+// 제목 줄 아래 있는 링크가 그 분류. 제목 줄보다 위에 있는 링크는 첫 번째 분류로 봄
+let CATS = ['데코타일', '장판'];
+let prodCat = {}; // { 상품번호: 분류 }
 let activeCat = null;
-const catOf = (store) => (CATS.includes(categories[store]) ? categories[store] : '데코타일'); // 분류 안 된 업체는 데코타일 쪽
+const catOf = (it) => prodCat[String(it.product)] || CATS[0];
 
-function dayTotalCat(day, cat) {
+function dayTotalWhere(day, fn) {
   const dd = dayData[day];
   if (!dd) return 0;
   let sum = 0;
-  items.forEach((it) => { if (catOf(it.store) === cat && dd[it.key]) sum += soldOf(it.key, dd[it.key]); });
+  items.forEach((it) => { if (fn(it) && dd[it.key]) sum += soldOf(it.key, dd[it.key]); });
   return sum;
 }
 
 function renderLegend() {
-  const stores = Object.keys(storeColors);
   const label = selectedDay === currentDay ? '오늘' : `${Number(selectedDay.slice(5, 7))}/${Number(selectedDay.slice(8))}`;
   const all = dayTotal(selectedDay, null) || 0;
-  const chip = (st) => {
-    const c = storeColors[st];
-    const t = dayTotal(selectedDay, st) || 0;
-    return `<span class="chip${activeStore === st ? ' active' : ''}" draggable="${canEdit}" data-store="${esc(st)}" style="background:${c.bg};border-color:${c.accent}">${esc(st)} (${label} ${t.toLocaleString()}개)</span>`;
-  };
-  let html = `<div class="legend-all"><span class="chip${activeStore === null && activeCat === null ? ' active' : ''}" data-store="" style="background:#eee;border-color:#999">전체 (${label} ${all.toLocaleString()}개)</span>
-    <span class="small">${canEdit ? '업체 버튼을 끌어서 다른 칸에 놓으면 분류가 바뀌어요' : '분류를 옮기려면 위쪽의 편집 켜기를 먼저 눌러주세요'}</span></div>`;
+  let html = `<div class="legend-all"><span class="chip${activeStore === null && activeCat === null ? ' active' : ''}" data-store="" data-cat="" style="background:#eee;border-color:#999">전체 (${label} ${all.toLocaleString()}개)</span>
+    <span class="small">분류는 products.txt의 [데코타일] [장판] 제목 줄로 정해져요 · 칸 제목을 누르면 그 분류만 보여요</span></div>`;
   html += '<div class="cat-wrap">';
   CATS.forEach((cat) => {
-    const list = stores.filter((st) => catOf(st) === cat);
-    html += `<div class="cat-box${activeCat === cat ? ' active' : ''}" data-cat="${cat}">
-      <div class="cat-title" data-cat-title="${cat}">${cat} <span>(${label} ${dayTotalCat(selectedDay, cat).toLocaleString()}개 · ${list.length}곳)</span></div>
-      <div class="cat-chips">${list.map(chip).join('') || '<span class="small">여기로 업체를 끌어다 놓으세요</span>'}</div>
+    const inCat = items.filter((it) => catOf(it) === cat);
+    const stores = [...new Set(inCat.map((it) => it.store))];
+    html += `<div class="cat-box${activeCat === cat && activeStore === null ? ' active' : ''}">
+      <div class="cat-title" data-cat-title="${esc(cat)}">${esc(cat)} <span>(${label} ${dayTotalWhere(selectedDay, (it) => catOf(it) === cat).toLocaleString()}개 · ${stores.length}곳)</span></div>
+      <div class="cat-chips">${stores.map((st) => {
+        const c = storeColors[st];
+        const t = dayTotalWhere(selectedDay, (it) => it.store === st && catOf(it) === cat);
+        const on = activeStore === st && activeCat === cat;
+        return `<span class="chip${on ? ' active' : ''}" data-store="${esc(st)}" data-cat="${esc(cat)}" style="background:${c.bg};border-color:${c.accent}">${esc(st)} (${label} ${t.toLocaleString()}개)</span>`;
+      }).join('') || '<span class="small">products.txt의 이 분류 제목 아래에 링크를 넣어주세요</span>'}</div>
     </div>`;
   });
   html += '</div>';
@@ -576,35 +567,16 @@ function renderLegend() {
   legend.querySelectorAll('.chip').forEach((el) => {
     el.addEventListener('click', () => {
       activeStore = el.dataset.store === '' ? null : el.dataset.store;
-      activeCat = null;
+      activeCat = el.dataset.cat === '' ? null : el.dataset.cat;
       renderAll();
     });
-    el.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', el.dataset.store); });
   });
   legend.querySelectorAll('[data-cat-title]').forEach((el) => {
     el.addEventListener('click', () => {
-      activeCat = activeCat === el.dataset.catTitle ? null : el.dataset.catTitle;
+      const c = el.dataset.catTitle;
+      activeCat = activeCat === c && activeStore === null ? null : c;
       activeStore = null;
       renderAll();
-    });
-  });
-  legend.querySelectorAll('.cat-box').forEach((box) => {
-    box.addEventListener('dragover', (e) => { if (canEdit) { e.preventDefault(); box.classList.add('over'); } });
-    box.addEventListener('dragleave', () => box.classList.remove('over'));
-    box.addEventListener('drop', (e) => {
-      e.preventDefault();
-      box.classList.remove('over');
-      const st = e.dataTransfer.getData('text/plain');
-      if (!st || !canEdit || catOf(st) === box.dataset.cat) return;
-      const before = categories[st];
-      categories[st] = box.dataset.cat;
-      saving = true;
-      setModeLabel();
-      renderAll();
-      saveCategoryChange({ [st]: box.dataset.cat })
-        .then((r) => { categories = r; })
-        .catch((err) => { alert('분류 저장 실패: ' + err.message + '\n잠시 후 다시 옮겨주세요.'); if (before) categories[st] = before; else delete categories[st]; })
-        .finally(() => { saving = false; setModeLabel(); renderAll(); });
     });
   });
 }
@@ -1149,21 +1121,27 @@ async function fetchRepoFile(path) {
 async function loadActiveProducts() {
   try {
     const { text } = await fetchRepoFile('products.txt');
-    const nums = text.split('\n').map((l) => l.trim()).filter(Boolean)
-      .map((l) => { const m = l.match(/products\/(\d+)/); return m ? m[1] : null; })
-      .filter(Boolean);
+    const nums = [];
+    const cat = {};
+    const order = [];
+    let current = null;
+    text.replace(/^﻿/, '').split(/\r?\n/).forEach((raw) => {
+      const l = raw.trim();
+      const h = l.match(/^\[(.+)\]$/);
+      if (h) { current = h[1].trim(); if (!order.includes(current)) order.push(current); return; }
+      const m = l.match(/products\/(\d+)/);
+      if (!m) return;
+      nums.push(m[1]);
+      if (current && !(m[1] in cat)) cat[m[1]] = current;
+    });
+    if (order.length) {
+      CATS = order.slice();
+      if (CATS.length === 1) CATS.push(CATS[0] === '장판' ? '데코타일' : '장판');
+    }
+    prodCat = cat;
     return nums.length ? nums : null;
   } catch (e) {
     return null;
-  }
-}
-
-async function loadCategories() {
-  try {
-    const { text } = await fetchRepoFile('data/categories.json');
-    return JSON.parse(text) || {};
-  } catch (e) {
-    return {};
   }
 }
 
@@ -1177,14 +1155,12 @@ async function loadApproved() {
 }
 
 async function loadData(isRefresh) {
-  const [latestF, historyF, active, appr, cats] = await Promise.all([
+  const [latestF, historyF, active, appr] = await Promise.all([
     fetchRepoFile('data/latest.json'),
     fetchRepoFile('data/history.json'),
     loadActiveProducts(),
     loadApproved(),
-    loadCategories(),
   ]);
-  categories = cats;
   if (!saving) approved = appr;
   const latest = JSON.parse(latestF.text);
   historyData = JSON.parse(historyF.text);
@@ -1281,13 +1257,12 @@ loadData().catch((err) => {
 // 탬퍼몽키가 깔린 관리용 컴퓨터인지 확인
 setTimeout(() => sendToTracker({ type: 'ping' }), 300);
 setTimeout(() => { if (!bridgeOk) sendToTracker({ type: 'ping' }); }, 2000);
-// 1분마다 판매 인정, 업체 분류만 가볍게 다시 읽어서 다른 컴퓨터에서 바꾼 내용 반영
+// 1분마다 판매 인정 내역만 가볍게 다시 읽어서 다른 컴퓨터에서 바꾼 내용 반영
 setInterval(async () => {
   if (saving || !items.length || document.hidden) return;
-  const [appr, cats] = await Promise.all([loadApproved(), loadCategories()]);
+  const appr = await loadApproved();
   if (saving) return;
-  const changed = JSON.stringify([...appr].sort()) !== JSON.stringify([...approved].sort()) || JSON.stringify(cats) !== JSON.stringify(categories);
-  if (changed) { approved = appr; categories = cats; renderAll(); }
+  if (JSON.stringify([...appr].sort()) !== JSON.stringify([...approved].sort())) { approved = appr; renderAll(); }
 }, 60 * 1000);
 // 10분마다 최신 데이터로 자동 새로고침 (두 컴퓨터 화면이 계속 같게)
 setInterval(() => { loadData(true).catch(() => {}); }, 10 * 60 * 1000);
