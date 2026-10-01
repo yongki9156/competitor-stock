@@ -194,6 +194,7 @@ let sourceText = '';
 // 방법 2: 탬퍼몽키가 없는 컴퓨터는 '편집 켜기'로 깃허브 토큰을 한 번 넣어두면 대시보드가 직접 저장
 //         (토큰은 그 컴퓨터 크롬에만 저장되고 웹페이지 파일에는 안 들어감)
 let bridgeOk = false;
+let lastSource = '';
 let ghToken = '';
 try { ghToken = localStorage.getItem('ghToken') || ''; } catch (e) { /* 무시 */ }
 const editMode = () => (bridgeOk ? 'bridge' : ghToken ? 'token' : null);
@@ -311,6 +312,11 @@ window.addEventListener('message', (ev) => {
   if (!m || m.from !== 'cs-tracker') return;
   if (m.type === 'pong' && !bridgeOk) {
     bridgeOk = true;
+    // 관리용 컴퓨터는 탬퍼몽키의 토큰으로 읽기도 해서 항상 최신 데이터를 봄 (메모리에만 두고 저장 안 함)
+    if (!ghToken && m.token) {
+      ghToken = m.token;
+      if (lastSource !== 'github') loadData(true).catch(() => {});
+    }
     refreshCanEdit();
     // 예전 버전에서 이 브라우저에만 저장해 둔 인정 내역이 있으면 깃허브로 옮김
     try {
@@ -1087,6 +1093,7 @@ function downloadExcel() {
 // 3. 깃허브 페이지스 사본 (자주 멈춰서 몇 시간씩 옛날 데이터일 수 있어 마지막 수단)
 const RAW_BASE = 'https://raw.githubusercontent.com/yongki9156/competitor-stock/main/';
 function apiBlocked() {
+  if (ghToken) return false; // 토큰이 있으면 시간당 5,000번이라 막힐 일이 거의 없음
   try { return Date.now() < Number(localStorage.getItem('ghApiBlockedUntil') || 0); } catch (e) { return false; }
 }
 function blockApi() {
@@ -1166,6 +1173,7 @@ async function loadData(isRefresh) {
   historyData = JSON.parse(historyF.text);
   flagsAll = detectSuspicious(historyData);
   const srcs = [latestF.source, historyF.source];
+  lastSource = srcs.includes('pages') ? 'pages' : srcs.includes('raw') ? 'raw' : 'github';
   const sourceLabel = srcs.includes('pages') ? '페이지스 사본(옛날 데이터일 수 있음)' : srcs.includes('raw') ? '깃허브 원본(최대 5분 지연)' : '깃허브 원본';
 
   items = Object.entries(latest).map(([key, it]) => Object.assign({ key }, it));
