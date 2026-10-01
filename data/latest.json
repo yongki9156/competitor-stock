@@ -8779,7 +8779,7 @@
     "optionName": "우드 AB 6933 1박스(20장)",
     "date": "2026-10-01",
     "stock": 28,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWDvpt6HxcR6fBUXjDYS_4835059435_59154331733": {
@@ -8789,7 +8789,7 @@
     "optionName": "우드 AB 6949 1박스(20장)",
     "date": "2026-10-01",
     "stock": 9,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "2sWDvpt6HxcR6fBUXjDYS_4835059435_59154331734": {
@@ -8799,7 +8799,7 @@
     "optionName": "사각 AS 4126 1박스(16장)",
     "date": "2026-10-01",
     "stock": 20,
-    "estSold": "",
+    "estSold": 0,
     "daily": {}
   },
   "31K5u4CH2zv28qD56C6sO_12706481072_53848128997": {
