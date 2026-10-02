@@ -59,6 +59,9 @@
   .cal-day .v { display:block; margin-top:2px; font-weight:700; font-size:13px; text-align:right; }
   .cal-day .live { display:block; font-size:10px; color:#e0442f; font-weight:700; line-height:1.2; }
   .cal-day.empty { cursor:default; background:#fafafa; color:#ccc; }
+  .cal-day.off { cursor:default; background:#f3f3f3; border-style:dashed; }
+  .cal-day.off .n { color:#e0442f; }
+  .cal-day .offl { display:block; text-align:right; font-size:12px; color:#999; margin-top:4px; }
   .cal-day.empty .n { color:#ccc; }
   .cal-day.blank { border:none; background:transparent; cursor:default; }
   .cal-day.sel { outline:2px solid #222; outline-offset:-1px; }
@@ -146,8 +149,8 @@
       <div class="cal-grid" id="cal"></div>
       <div class="cal-note">
         날짜 칸 숫자는 그날 판매량 합계예요 (위에서 고른 스토어 기준).<br>
-        하루는 그날 아침 7시부터 다음날 아침 7시까지예요. 큰 숫자가 전체, 아래가 1타임(17시~다음날 07시)과 2타임(07~17시)이에요.<br>
-        컴퓨터가 꺼져 있던 밤사이 줄어든 양은 전날 1타임으로 들어가요.<br>
+        근무일 기준이에요. 1타임은 직전 근무일 17시부터 그날 07시까지(출근 전), 2타임은 07~17시예요. 큰 숫자가 둘을 합친 전체예요.<br>
+        토·일·공휴일 판매량은 다음 근무일 1타임에 합쳐져요. 17시가 지나면 다음 근무일이 진행중이 돼요.<br>
         빨간 '진행중'은 아직 마감 전이라 계속 늘어나는 날이에요.<br>
         파란 '▲'는 재고가 한 번에 1,000개 이상 늘어난 날이에요 (입고 또는 사람이 숫자를 늘림, 판매량에는 영향 없음).<br>
         주황 '!'는 사람이 재고를 직접 고친 것으로 의심되는 감소가 있는 날이에요. 합계에서 빠져 있고, 표에서 줄을 눌러 판매로 인정하면 다시 들어가요.
@@ -164,7 +167,7 @@
             <th data-key="store">스토어</th>
             <th data-key="optionName">옵션</th>
             <th data-key="s" class="num">전체 판매</th>
-            <th data-key="t1" class="num">1타임<br><span class="th-sub">17~07시</span></th>
+            <th data-key="t1" class="num">1타임<br><span class="th-sub">전 근무일 17시~07시</span></th>
             <th data-key="t2" class="num">2타임<br><span class="th-sub">07~17시</span></th>
             <th data-key="k" class="num" id="stockHead">마감 재고</th>
             <th data-key="last" class="num">최근확인</th>
@@ -412,7 +415,7 @@ function computeDay(rec, day, flags, now) {
   flags = flags || {};
   const { start, split, end } = dayWindow(day);
   const es = Object.keys(rec).map((t) => ({ t, dt: toDate(t), v: rec[t] })).sort((a, b) => a.dt - b.dt);
-  const mk = () => ({ s: 0, u: 0, x: 0, ev: [], up: 0, upEv: [] });
+  const mk = () => ({ s: 0, u: 0, x: 0, ev: [], up: 0, upEv: [], uEv: [] });
   const all = mk();
   const t1 = mk();
   const t2 = mk();
@@ -439,7 +442,7 @@ function computeDay(rec, day, flags, now) {
     const gapH = (nx.dt - e.dt) / 3600000;
     [per, all].forEach((p) => {
       if (f) { p.x += d; p.ev.push([nx.t, d, f.why.join(', ')]); }
-      else if (gapH > LONG_GAP_HOURS) p.u += d;
+      else if (gapH > LONG_GAP_HOURS) { p.u += d; p.uEv.push([e.t, nx.t, d]); }
       else p.s += d;
     });
   }
@@ -515,32 +518,108 @@ function computeWindow(rec, start, end, flags) {
 
 // 모든 옵션의 날짜별 판매량 만들기
 // 시간별 기록이 남아있는 날은 기록으로 계산, 14일 지나 지워진 날은 latest.json 에 보관된 값 사용
+// ---------------- 근무일 기준 (토·일·공휴일은 다음 근무일 1타임으로) ----------------
+// 법정공휴일 (대체공휴일, 선거일 포함). 회사 사정으로 쉬는 날은 products.txt 의 [휴무일] 아래에,
+// 공휴일인데 근무한 날은 [근무일] 아래에 2026-10-05 처럼 날짜를 적으면 됨
+const KR_HOLIDAYS = [
+  '2026-01-01', '2026-02-16', '2026-02-17', '2026-02-18', '2026-03-02', '2026-05-01', '2026-05-05', '2026-05-25',
+  '2026-06-03', '2026-07-17', '2026-08-17', '2026-09-24', '2026-09-25', '2026-10-05', '2026-10-09', '2026-12-25',
+  '2027-01-01', '2027-02-08', '2027-02-09', '2027-03-01', '2027-05-03', '2027-05-05', '2027-05-13', '2027-07-19',
+  '2027-08-16', '2027-09-14', '2027-09-15', '2027-09-16', '2027-10-04', '2027-10-11', '2027-12-27',
+];
+let extraOff = new Set();  // products.txt [휴무일]
+let extraWork = new Set(); // products.txt [근무일]
+function isWorkday(day) {
+  if (extraWork.has(day)) return true;
+  if (extraOff.has(day) || KR_HOLIDAYS.includes(day)) return false;
+  const w = toDate(day).getDay();
+  return w !== 0 && w !== 6;
+}
+const addDays = (day, n) => { const d = toDate(day); d.setDate(d.getDate() + n); return ymd(d); };
+function prevWorkday(day) { let d = addDays(day, -1); for (let i = 0; i < 40 && !isWorkday(d); i++) d = addDays(d, -1); return d; }
+function nextWorkday(day) { let d = addDays(day, 1); for (let i = 0; i < 40 && !isWorkday(d); i++) d = addDays(d, 1); return d; }
+// 근무일 W 의 범위: 1타임 = 직전 근무일 17시 ~ W 07시, 2타임 = W 07시 ~ 17시
+function workPeriod(day) {
+  const start = toDate(prevWorkday(day)); start.setHours(SPLIT_HOUR, 0, 0, 0);
+  const split = toDate(day); split.setHours(DAY_START_HOUR, 0, 0, 0);
+  const end = toDate(day); end.setHours(SPLIT_HOUR, 0, 0, 0);
+  return { start, split, end };
+}
+// 지금 시각이 들어가는 근무일 (17시 넘으면 다음 근무일로 넘어감)
+function workdayOf(dt) {
+  const d = new Date(dt);
+  let day = ymd(d);
+  if (isWorkday(day) && d.getHours() < SPLIT_HOUR) return day;
+  return nextWorkday(day);
+}
+
+// 기록이 오래 비었어도(컴퓨터 꺼짐 등) 그 공백이 한 근무일 범위 안에서 끝나면 그 근무일 판매로 봄
+function mergeParts(parts, end) {
+  const o = { s: 0, u: 0, x: 0, ev: [], up: 0, upEv: [] };
+  parts.forEach((p) => {
+    if (!p) return;
+    let moved = 0;
+    if (end) (p.uEv || []).forEach(([, bT, d]) => { if (toDate(bT) <= end) moved += d; });
+    o.s += (p.s || 0) + moved; o.u += (p.u || 0) - moved; o.x += p.x || 0; o.up += p.up || 0;
+    (p.ev || []).forEach((e) => o.ev.push(e));
+    (p.upEv || []).forEach((e) => o.upEv.push(e));
+  });
+  return o;
+}
+
+function stockAtOrBefore(rec, dt) {
+  let best = null;
+  Object.keys(rec).forEach((t) => { const d = toDate(t); if (d <= dt && (!best || d > best.d)) best = { d, v: rec[t] }; });
+  return best ? best.v : null;
+}
+
+// 날짜별 조각(07~17시, 17시~다음날 07시)을 계산한 다음 근무일 단위로 합침
 function buildDayData(now) {
   dayData = {};
-  currentDay = bizDayOf(now);
+  currentDay = workdayOf(now);
   items.forEach((it) => {
     const rec = historyData[it.key] || {};
     const archive = it.daily || {};
+    // 1) 날짜별 조각
+    const seg = {};
     const days = new Set(Object.keys(archive));
     const keys = Object.keys(rec).sort();
+    const today = ymd(now);
     if (keys.length) {
-      const d = toDate(bizDayOf(toDate(keys[0])));
-      for (let g = 0; g < 400; g++) {
-        const day = ymd(d);
-        if (day > currentDay) break;
-        days.add(day);
-        d.setDate(d.getDate() + 1);
-      }
+      let d = addDays(bizDayOf(toDate(keys[0])), -1);
+      for (let g = 0; g < 400 && d <= today; g++) { days.add(d); d = addDays(d, 1); }
     }
     days.forEach((day) => {
-      const r = computeDay(rec, day, flagsAll[it.key], day === currentDay ? now : null);
-      let v = null;
-      // 예전 기준(18시 마감)으로 보관된 값은 시간별 기록이 있으면 새 기준으로 다시 계산
-      if (r && (r.base || !archive[day] || !archive[day].t1)) v = r;
-      else if (archive[day]) v = Object.assign({ x: 0, ev: [] }, archive[day], { archived: true });
-      if (!v) return;
-      (dayData[day] = dayData[day] || {})[it.key] = v;
+      const r = computeDay(rec, day, flagsAll[it.key], now);
+      if (r && (r.base || !archive[day] || !archive[day].t1)) seg[day] = r;
+      else if (archive[day] && archive[day].t1) seg[day] = Object.assign({ archived: true }, archive[day]);
     });
+    const segDays = Object.keys(seg).sort();
+    if (!segDays.length) return;
+    // 2) 근무일로 합치기
+    let w = isWorkday(segDays[0]) ? segDays[0] : nextWorkday(segDays[0]);
+    for (let g = 0; g < 400 && w <= currentDay; g++, w = nextWorkday(w)) {
+      const pw = prevWorkday(w);
+      const nightParts = [];
+      const dayParts = [];
+      for (let c = pw; c < w; c = addDays(c, 1)) {
+        if (!seg[c]) continue;
+        nightParts.push(seg[c].t1); // c 17시 ~ 다음날 07시
+        if (c !== pw) dayParts.push(seg[c].t2); // 쉬는 날 낮 시간
+      }
+      const { end } = workPeriod(w);
+      const t1 = mergeParts(nightParts.concat(dayParts), end);
+      const t2 = seg[w] ? mergeParts([seg[w].t2], end) : mergeParts([]);
+      const hasAny = nightParts.some(Boolean) || dayParts.some(Boolean) || !!seg[w];
+      if (!hasAny) continue;
+      const all = mergeParts([t1, t2]);
+      let k = stockAtOrBefore(rec, end < now ? end : now);
+      if (k === null) { const last = seg[w] || seg[pw]; k = last ? last.k : 0; }
+      all.k = k;
+      all.t1 = t1;
+      all.t2 = t2;
+      (dayData[w] = dayData[w] || {})[it.key] = all;
+    }
   });
 }
 
@@ -701,6 +780,10 @@ function renderCalendar() {
     const day = ymd(new Date(y, m, d));
     const t = totals[day];
     const has = !!dayData[day];
+    if (!isWorkday(day)) {
+      html += `<div class="cal-day off" title="쉬는 날 판매량은 ${nextWorkday(day).slice(5).replace('-', '/')} 1타임에 포함돼요"><span class="n">${d}</span><span class="offl">휴무</span><span class="ts">→ ${Number(nextWorkday(day).slice(5, 7))}/${Number(nextWorkday(day).slice(8))} 1타임</span></div>`;
+      continue;
+    }
     const cls = ['cal-day'];
     if (!has) cls.push('empty');
     if (day === selectedDay) cls.push('sel');
@@ -756,9 +839,9 @@ function recordsHtml(key, day, all) {
   if (all) {
     list = entries;
   } else {
-    const { start, end } = dayWindow(day);
+    const { start, end } = workPeriod(day);
     list = entries.filter((e) => e.dt >= start && e.dt < end);
-    // 밤사이 줄어든 양은 다음날 첫 기록과의 차이라서 그 기록도 같이 보여줌
+    // 마지막 구간 줄어든 양은 다음 기록과의 차이라서 그 기록도 같이 보여줌
     const next = entries.find((e) => e.dt >= end);
     if (list.length && next) list.push(Object.assign({ nextDay: true }, next));
   }
@@ -775,12 +858,12 @@ function recordsHtml(key, day, all) {
       prev = e;
     });
   } else {
-    const { split } = dayWindow(day);
+    const { split } = workPeriod(day);
     let sec = '';
     list.forEach((e) => {
-      const ns = e.nextDay ? sec : (e.dt < split ? '2' : '1');
+      const ns = e.nextDay ? sec : (e.dt < split ? '1' : '2');
       if (ns !== sec) {
-        html += `<div class="dayhdr">${ns === '2' ? '2타임 (07~17시)' : '1타임 (17시~다음날 07시)'}</div>`;
+        html += `<div class="dayhdr">${ns === '1' ? '1타임 (직전 근무일 17시 ~ 07시)' : '2타임 (07~17시)'}</div>`;
         sec = ns;
       }
       html += recLine(e, prev, fl);
@@ -801,7 +884,7 @@ function recLine(e, prev, fl) {
     else if (d < 0) diff = `<span class="p">+${(-d).toLocaleString()} 입고</span>`;
     else diff = '<span class="base">변화없음</span>';
   }
-  return `<div class="r"><span>${fmtDT(e.dt)}${e.nextDay ? ' (다음날)' : ''}</span><span>${e.v.toLocaleString()}개</span><span>${diff}</span></div>`;
+  return `<div class="r"><span>${fmtDT(e.dt)}${e.nextDay ? ' (다음 기록)' : ''}</span><span>${e.v.toLocaleString()}개</span><span>${diff}</span></div>`;
 }
 
 function slotCell(p, key) {
@@ -839,7 +922,7 @@ function susHtml(key, v) {
 
 function renderTable() {
   const live = selectedDay === currentDay;
-  const { start, end } = dayWindow(selectedDay);
+  const { start, end } = workPeriod(selectedDay);
   const [yy, mm, dd] = selectedDay.split('-').map(Number);
   document.getElementById('dayTitle').textContent = `${yy}년 ${mm}월 ${dd}일 판매량${live ? ' (진행중)' : ''}`;
   document.getElementById('daySub').textContent = `${fmtDT(start)} ~ ${live ? '지금' : fmtDT(end)} 기준 · 줄을 누르면 시간별 재고 기록이 펼쳐져요`;
@@ -1269,12 +1352,23 @@ async function loadActiveProducts() {
     const nums = [];
     const cat = {};
     const units = {};
+    const offs = new Set();
+    const works = new Set();
     const order = [];
     let current = null;
     text.replace(/^﻿/, '').split(/\r?\n/).forEach((raw) => {
       const l = raw.trim();
       const h = l.match(/^\[(.+)\]$/);
-      if (h) { current = h[1].trim(); if (!order.includes(current)) order.push(current); return; }
+      if (h) {
+        current = h[1].trim();
+        if (current !== '휴무일' && current !== '근무일' && !order.includes(current)) order.push(current);
+        return;
+      }
+      if (current === '휴무일' || current === '근무일') {
+        const dm = l.match(/^(\d{4})[-.\/](\d{1,2})[-.\/](\d{1,2})/);
+        if (dm) (current === '휴무일' ? offs : works).add(`${dm[1]}-${dm[2].padStart(2, '0')}-${dm[3].padStart(2, '0')}`);
+        return;
+      }
       const m = l.match(/products\/(\d+)/);
       if (!m) return;
       nums.push(m[1]);
@@ -1289,6 +1383,8 @@ async function loadActiveProducts() {
     }
     prodCat = cat;
     unitDiv = units;
+    extraOff = offs;
+    extraWork = works;
     return nums.length ? nums : null;
   } catch (e) {
     return null;
