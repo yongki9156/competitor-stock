@@ -78,6 +78,11 @@
   .sold-high { color:#e0442f; }
   .unk { font-weight:400; font-size:11px; color:#999; cursor:help; }
   .sus { font-weight:700; font-size:11px; color:#d97706; }
+  .rise { font-weight:700; font-size:11px; color:#2563eb; }
+  .cal-day .up { position:absolute; top:3px; right:14px; font-size:10px; font-weight:800; color:#2563eb; }
+  .rise-box { border:1px solid #9cc0f5; background:#f0f6ff; border-radius:6px; padding:8px 10px; margin-bottom:10px; font-size:13px; }
+  .rise-box .ev { display:flex; flex-wrap:wrap; gap:10px; padding:3px 0; }
+  .recs .up { color:#2563eb; font-weight:700; }
   .ok { font-weight:400; font-size:11px; color:#22a55b; }
   .cal-day .warn { position:absolute; top:3px; right:5px; font-size:11px; font-weight:800; color:#d97706; }
   .sus-box { border:1px solid #f5c26b; background:#fff8ec; border-radius:6px; padding:8px 10px; margin-bottom:10px; font-size:13px; }
@@ -144,6 +149,7 @@
         하루는 그날 아침 7시부터 다음날 아침 7시까지예요. 큰 숫자가 전체, 아래가 1타임(17시~다음날 07시)과 2타임(07~17시)이에요.<br>
         컴퓨터가 꺼져 있던 밤사이 줄어든 양은 전날 1타임으로 들어가요.<br>
         빨간 '진행중'은 아직 마감 전이라 계속 늘어나는 날이에요.<br>
+        파란 '▲'는 재고가 한 번에 1,000개 이상 늘어난 날이에요 (입고 또는 사람이 숫자를 늘림, 판매량에는 영향 없음).<br>
         주황 '!'는 사람이 재고를 직접 고친 것으로 의심되는 감소가 있는 날이에요. 합계에서 빠져 있고, 표에서 줄을 눌러 판매로 인정하면 다시 들어가요.
       </div>
     </div>
@@ -392,7 +398,7 @@ function computeDay(rec, day, flags, now) {
   flags = flags || {};
   const { start, split, end } = dayWindow(day);
   const es = Object.keys(rec).map((t) => ({ t, dt: toDate(t), v: rec[t] })).sort((a, b) => a.dt - b.dt);
-  const mk = () => ({ s: 0, u: 0, x: 0, ev: [] });
+  const mk = () => ({ s: 0, u: 0, x: 0, ev: [], up: 0, upEv: [] });
   const all = mk();
   const t1 = mk();
   const t2 = mk();
@@ -408,8 +414,13 @@ function computeDay(rec, day, flags, now) {
     const nx = es[i + 1];
     if (!nx || (now && nx.dt > now)) continue;
     const d = e.v - nx.v;
-    if (d <= 0) continue; // 재고가 늘거나 그대로면 판매 아님
     const per = e.dt < split ? t2 : t1;
+    if (d < 0) {
+      // 재고가 늘면 판매 아님. 크게 늘었으면 따로 기록만 해 둠
+      if (-d >= DETECT.BIG_RISE) [per, all].forEach((p) => { p.up += -d; p.upEv.push([nx.t, -d, e.v, nx.v]); });
+      continue;
+    }
+    if (d === 0) continue;
     const f = flags[nx.t];
     const gapH = (nx.dt - e.dt) / 3600000;
     [per, all].forEach((p) => {
@@ -429,6 +440,7 @@ function fmtDT(d) {
 // ---------------- 수동 재고변경 감지 설정 (대시보드와 탬퍼몽키 스크립트 값을 똑같이 맞출 것) ----------------
 const DETECT = {
   BIG_DROP: 1000, // 한 번(보통 1시간) 사이에 이 수량 이상 줄면 사람이 재고를 직접 고친 것으로 의심
+  BIG_RISE: 1000, // 한 번에 이 수량 이상 늘면 '재고 대량 증가'로 표시 (입고 또는 사람이 숫자를 늘린 것, 판매량에는 영향 없음)
 };
 
 // 전체 기록에서 수동변경 의심 감소를 찾음
@@ -531,6 +543,14 @@ function slotTotal(day, slot) {
   if (!dd) return 0;
   let n = 0;
   items.forEach((it) => { const v = dd[it.key]; if (v && v[slot] && matchFilter(it)) n += soldOf(it.key, v[slot]); });
+  return n;
+}
+
+function dayRise(day) {
+  const dd = dayData[day];
+  if (!dd) return 0;
+  let n = 0;
+  items.forEach((it) => { if (matchFilter(it) && dd[it.key] && dd[it.key].up) n += dd[it.key].up; });
   return n;
 }
 
@@ -673,7 +693,7 @@ function renderCalendar() {
     const alpha = t && max ? 0.08 + 0.35 * (t / max) : 0;
     const style = alpha ? `style="background:rgba(59,130,246,${alpha.toFixed(2)})"` : '';
     html += `<div class="${cls.join(' ')}" data-day="${day}" ${style}>
-      <span class="n">${d}</span>${has && dayPending(day) > 0 ? '<span class="warn" title="수동변경 의심 있음">!</span>' : ''}${day === currentDay ? '<span class="live">진행중</span>' : ''}
+      <span class="n">${d}</span>${has && dayPending(day) > 0 ? '<span class="warn" title="수동변경 의심 있음">!</span>' : ''}${has && dayRise(day) > 0 ? '<span class="up" title="재고 대량 증가 있음">▲</span>' : ''}${day === currentDay ? '<span class="live">진행중</span>' : ''}
       ${has ? `<span class="v">${(t || 0).toLocaleString()}</span><span class="ts">1타임 ${slotTotal(day, 't1').toLocaleString()}<br>2타임 ${slotTotal(day, 't2').toLocaleString()}</span>` : ''}
     </div>`;
   }
@@ -700,6 +720,7 @@ function soldCell(v, key) {
   }
   const pend = pendingOf(key, v);
   if (pend > 0) html += `<br><span class="sus" title="줄을 누르면 이유를 보고 판매로 인정할 수 있어요">+${pend.toLocaleString()} 수동변경 의심</span>`;
+  if (v.up > 0) html += `<br><span class="rise" title="한 번에 ${DETECT.BIG_RISE.toLocaleString()}개 이상 늘어난 기록이 있어요 (입고 또는 사람이 재고 숫자를 늘림)">▲ +${v.up.toLocaleString()} 재고 증가</span>`;
   const acc = soldOf(key, v) - v.s;
   if (acc > 0) html += `<br><span class="ok">의심 ${acc.toLocaleString()} 인정 포함</span>`;
   return html;
@@ -762,6 +783,7 @@ function recLine(e, prev, fl) {
     const d = prev.v - e.v;
     if (d > 0 && fl && fl[e.t]) diff = `<span class="s" title="${esc(fl[e.t].why.join(', '))}">-${d.toLocaleString()} 의심</span>`;
     else if (d > 0) diff = `<span class="d">-${d.toLocaleString()}</span>`;
+    else if (d < 0 && -d >= DETECT.BIG_RISE) diff = `<span class="up">▲ +${(-d).toLocaleString()} 대량 증가</span>`;
     else if (d < 0) diff = `<span class="p">+${(-d).toLocaleString()} 입고</span>`;
     else diff = '<span class="base">변화없음</span>';
   }
@@ -774,7 +796,17 @@ function slotCell(p, key) {
   const pend = pendingOf(key, p);
   if (p.u > 0) h += `<br><span class="unk">+${p.u.toLocaleString()} 기간불명</span>`;
   if (pend > 0) h += `<br><span class="sus">+${pend.toLocaleString()} 의심</span>`;
+  if (p.up > 0) h += `<br><span class="rise">▲ +${p.up.toLocaleString()}</span>`;
   return h;
+}
+
+function riseHtml(v) {
+  if (!v || !v.upEv || !v.upEv.length) return '';
+  let html = '<div class="rise-box"><b>재고 대량 증가</b> · 입고했거나 판매자가 재고 숫자를 직접 늘린 기록이에요 (판매량 계산에는 영향 없음)';
+  v.upEv.forEach(([t, d, from, to]) => {
+    html += `<div class="ev"><span>${fmtDT(toDate(t))}</span><b>▲ +${d.toLocaleString()}개</b><span class="small">${Number(from).toLocaleString()}개 → ${Number(to).toLocaleString()}개</span></div>`;
+  });
+  return html + '</div>';
 }
 
 function susHtml(key, v) {
@@ -842,6 +874,7 @@ function renderTable() {
           <b>${esc(r.optionName)}</b>
           <button data-toggle-all="${esc(r.it.key)}">${all ? '이 날 기록만 보기' : '전체 기록 보기 (최근 14일)'}</button>
         </div>
+        ${riseHtml(r.v)}
         ${susHtml(r.it.key, r.v)}
         ${recordsHtml(r.it.key, selectedDay, all)}
       </td></tr>`;
@@ -1143,6 +1176,20 @@ function downloadExcel() {
   const ws4 = XLSX.utils.aoa_to_sheet(sus);
   ws4['!cols'] = [{ wch: 12 }, { wch: 17 }, { wch: 12 }, { wch: 30 }, { wch: 40 }, { wch: 9 }, { wch: 60 }, { wch: 10 }];
   XLSX.utils.book_append_sheet(wb, ws4, '수동변경의심');
+
+  // 4-2. 재고 대량 증가 목록
+  const ups = [['영업일', '시간', '스토어', '상품명', '옵션', '증가수량', '이전 재고', '바뀐 재고']];
+  days.forEach((day) => {
+    items.forEach((it) => {
+      const v = dayData[day][it.key];
+      (v && v.upEv ? v.upEv : []).forEach(([t, d, from, to]) => {
+        ups.push([day, t.replace('T', ' '), it.store, it.productName || '', it.optionName || '', d, from, to]);
+      });
+    });
+  });
+  const ws4b = XLSX.utils.aoa_to_sheet(ups);
+  ws4b['!cols'] = [{ wch: 12 }, { wch: 17 }, { wch: 12 }, { wch: 30 }, { wch: 40 }, { wch: 9 }, { wch: 10 }, { wch: 10 }];
+  XLSX.utils.book_append_sheet(wb, ws4b, '재고대량증가');
 
   // 5. 기존 엑셀 양식과 같은 열 위치 (G열, AS열, BW열 등)에 재고를 채운 시트
   const ws5 = XLSX.utils.aoa_to_sheet(buildSheetFormRows());
